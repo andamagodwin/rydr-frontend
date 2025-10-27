@@ -10,17 +10,11 @@ function Welcome() {
           <div className="grid lg:grid-cols-2 gap-8 lg:gap-12 items-center">
             {/* Right - Hero Image - Hidden on mobile */}
             <div className="relative hidden lg:block">
-              <div className="bg-gradient-to-br from-primary to-pink-600 rounded-2xl p-2 shadow-xl">
-                <div className="bg-white rounded-xl p-3 text-center">
-                  <div className="w-full h-64 bg-gray-100 rounded-lg flex items-center justify-center mb-4">
-                    <svg className="w-24 h-24 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8.25 18.75a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h6m-9 0H3.375a1.125 1.125 0 01-1.125-1.125V14.25m6.75 4.5v-3.375a1.125 1.125 0 011.125-1.125h2.25a1.125 1.125 0 011.125 1.125v3.375m-6 0h4.5m0-4.5h2.25a1.125 1.125 0 011.125-1.125V9.375c0-.621-.504-1.125-1.125-1.125s-1.125.504-1.125 1.125v1.5h-9V9.375c0-.621.504-1.125 1.125-1.125s1.125.504 1.125 1.125v1.5" />
-                    </svg>
-                  </div>
-                  <h3 className="text-xl font-semibold text-black mb-2">Smart Ride Matching</h3>
-                  <p className="text-gray-600">AI-powered matching system for the perfect ride experience</p>
-                </div>
-              </div>
+              <img 
+                src="/car-driving-pana.svg" 
+                alt="Car Driving" 
+                className="w-full h-auto"
+              />
             </div>
             {/* Left - Hero Content */}
             <div className="space-y-8">
