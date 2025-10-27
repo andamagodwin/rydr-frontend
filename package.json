@@ -15,8 +15,10 @@
     "@polkadot/util-crypto": "^13.5.7",
     "lottie-react": "^2.4.1",
     "ogl": "^1.0.11",
+    "leaflet": "^1.9.4",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
+    "react-leaflet": "^5.0.0",
     "react-router-dom": "^7.9.4"
   },
   "devDependencies": {
