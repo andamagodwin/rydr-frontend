@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 
 function Welcome() {
   return (
-    <div className="bg-white">
+    <div className="bg-white rounded-b-xl">
       {/* Hero Section */}
       <section className="py-12 md:py-20 px-6">
         <div className="max-w-7xl mx-auto">
@@ -29,10 +29,10 @@ function Welcome() {
               </div>
               
               <div className="flex flex-row gap-3 md:gap-4">
-                <Link to="/find-ride" className="flex-1 bg-primary text-white px-4 md:px-8 py-3 md:py-4 rounded-lg text-sm md:text-lg font-semibold hover:bg-opacity-90 transition-colors text-center">
+                <Link to="/find-ride" className="flex-1 bg-primary text-white px-1 md:px-8 py-1 md:py-4 rounded-full text-sm md:text-lg font-semibold hover:bg-opacity-90 transition-colors text-center">
                   Find a Ride
                 </Link>
-                <Link to="/offer-ride" className="flex-1 border-2 border-primary text-primary px-4 md:px-8 py-3 md:py-4 rounded-lg text-sm md:text-lg font-semibold hover:bg-primary hover:text-white transition-colors text-center">
+                <Link to="/offer-ride" className="flex-1 border-2 border-primary text-primary px-2 md:px-8 py-3 md:py-4 rounded-full text-sm md:text-lg font-semibold hover:bg-primary hover:text-white transition-colors text-center">
                   Offer a Ride
                 </Link>
               </div>

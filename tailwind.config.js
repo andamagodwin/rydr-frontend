@@ -13,6 +13,9 @@ export default {
           black: '#000000',
         },
       },
+      fontFamily: {
+        sans: ['Nunito', 'system-ui', 'sans-serif'],
+      },
     },
   },
   plugins: [],
