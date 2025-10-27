@@ -26,8 +26,8 @@ function Welcome() {
             <div className="space-y-8">
               <div className="space-y-4">
                 <h1 className="text-5xl lg:text-7xl font-bold text-black leading-tight">
-                  Your Ride, 
-                  <span className="text-primary"> Your Rules</span>
+                  Ride Together, 
+                  <span className="text-primary"> Earn Together</span>
                 </h1>
                 <p className="text-xl text-gray-600 leading-relaxed">
                   Peer-to-peer ride-sharing platform powered by Polkadot.

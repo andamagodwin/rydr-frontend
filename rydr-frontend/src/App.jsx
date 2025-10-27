@@ -1,5 +1,6 @@
 import React from 'react'
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'
+import { WalletProvider } from './components/WalletProvider'
 import Navbar from './components/Navbar'
 import Footer from './components/Footer'
 import Welcome from './components/Welcome'
@@ -10,21 +11,23 @@ import './App.css'
 
 function App() {
   return (
-    <Router>
-      <div className="App min-h-screen flex flex-col">
-        <Navbar />
-        <main className="flex-grow">
-          <Routes>
-            <Route path="/" element={<Welcome />} />
-            <Route path="/home" element={<Welcome />} />
-            <Route path="/find-ride" element={<FindRide />} />
-            <Route path="/offer-ride" element={<OfferRide />} />
-            <Route path="/connect-wallet" element={<ConnectWallet />} />
-          </Routes>
-        </main>
-        <Footer />
-      </div>
-    </Router>
+    <WalletProvider>
+      <Router>
+        <div className="">
+          <Navbar />
+          <main className="flex-grow bg-blue-500">
+            <Routes>
+              <Route path="/" element={<Welcome />} />
+              <Route path="/home" element={<Welcome />} />
+              <Route path="/find-ride" element={<FindRide />} />
+              <Route path="/offer-ride" element={<OfferRide />} />
+              <Route path="/connect-wallet" element={<ConnectWallet />} />
+            </Routes>
+          </main>
+          <Footer />
+        </div>
+      </Router>
+    </WalletProvider>
   )
 }
 
