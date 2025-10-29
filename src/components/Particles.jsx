@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Renderer, Camera, Geometry, Program, Mesh } from 'ogl';
 
 const defaultColors = ['#ffffff', '#ffffff', '#ffffff'];
@@ -99,15 +99,49 @@ const Particles = ({
 }) => {
   const containerRef = useRef(null);
   const mouseRef = useRef({ x: 0, y: 0 });
+  const [webglUnavailable, setWebglUnavailable] = useState(false);
 
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
 
-    const renderer = new Renderer({ depth: false, alpha: true });
-    const gl = renderer.gl;
-    container.appendChild(gl.canvas);
-    gl.clearColor(0, 0, 0, 0);
+    // Quick WebGL availability check
+    const isWebGLAvailable = () => {
+      try {
+        const canvas = document.createElement('canvas');
+        return !!(window.WebGLRenderingContext && (canvas.getContext('webgl') || canvas.getContext('experimental-webgl')));
+      } catch {
+        return false;
+      }
+    };
+
+    if (!isWebGLAvailable()) {
+      console.warn('Particles: WebGL not available in this environment. Skipping particle rendering.');
+      setWebglUnavailable(true);
+      return;
+    }
+
+    let renderer;
+    let gl;
+    try {
+      renderer = new Renderer({ depth: false, alpha: true });
+      gl = renderer.gl;
+      if (!gl || !gl.canvas) throw new Error('Renderer did not provide a WebGL context');
+      container.appendChild(gl.canvas);
+      gl.clearColor(0, 0, 0, 0);
+    } catch (err) {
+      console.error('Particles: Failed to initialize WebGL renderer:', err);
+      setWebglUnavailable(true);
+      // Clean up partial renderer if necessary
+      try {
+        if (renderer && renderer.gl && renderer.gl.canvas && container.contains(renderer.gl.canvas)) {
+          container.removeChild(renderer.gl.canvas);
+        }
+      } catch {
+        // ignore
+      }
+      return;
+    }
 
     const camera = new Camera(gl, { fov: 15 });
     camera.position.set(0, 0, cameraDistance);
@@ -229,6 +263,14 @@ const Particles = ({
     cameraDistance,
     disableRotation
   ]);
+
+  if (webglUnavailable) {
+    return (
+      <div className={`relative w-full h-full ${className}`} aria-hidden>
+        {/* WebGL not available — particles disabled */}
+      </div>
+    );
+  }
 
   return <div ref={containerRef} className={`relative w-full h-full ${className}`} />;
 };

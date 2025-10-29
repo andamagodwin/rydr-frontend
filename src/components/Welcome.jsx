@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import Particles from './Particles'
+import ErrorBoundary from './ErrorBoundary'
 import Lottie from 'lottie-react'
 
 function Welcome() {
@@ -18,7 +19,8 @@ function Welcome() {
       <section className="py-12 md:py-20 px-6 relative overflow-hidden">
         {/* Particle Background */}
         <div className="absolute inset-0 w-full h-full pointer-events-none">
-          <Particles
+          <ErrorBoundary>
+            <Particles
             particleColors={['#E6007A', '#ffffff']}
             particleCount={200}
             particleSpread={10}
@@ -27,7 +29,8 @@ function Welcome() {
             moveParticlesOnHover={true}
             alphaParticles={false}
             disableRotation={false}
-          />
+            />
+          </ErrorBoundary>
         </div>
         
         <div className="max-w-7xl mx-auto relative z-10">{/* Right - Hero Image - Hidden on mobile */}
