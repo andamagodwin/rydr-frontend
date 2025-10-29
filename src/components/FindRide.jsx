@@ -1,48 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react'
-import { MapContainer, TileLayer, Polyline, Marker, Popup, useMap } from 'react-leaflet'
-import L from 'leaflet'
-import 'leaflet/dist/leaflet.css'
+import mapboxgl from 'mapbox-gl'
+import 'mapbox-gl/dist/mapbox-gl.css'
 
-// Get Mapbox token from environment variables
-const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_ACCESS_TOKEN
-
-// Fix for default markers in react-leaflet
-delete L.Icon.Default.prototype._getIconUrl
-L.Icon.Default.mergeOptions({
-  iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
-  iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
-  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
-})
-
-// Custom marker icons
-const createCustomIcon = (color, isPickup = true) => {
-  const svgIcon = `
-    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <circle cx="12" cy="12" r="8" fill="${color}" stroke="white" stroke-width="3"/>
-      <circle cx="12" cy="12" r="4" fill="white"/>
-      ${isPickup ? '<circle cx="12" cy="12" r="2" fill="#10B981"/>' : '<circle cx="12" cy="12" r="2" fill="#EF4444"/>'}
-    </svg>
-  `
-  return L.divIcon({
-    html: svgIcon,
-    className: 'custom-marker',
-    iconSize: [24, 24],
-    iconAnchor: [12, 12],
-  })
-}
-
-// Component to handle map updates
-function MapUpdater({ center, zoom }) {
-  const map = useMap()
-  
-  useEffect(() => {
-    if (center && zoom) {
-      map.setView(center, zoom)
-    }
-  }, [map, center, zoom])
-  
-  return null
-}
+// Mapbox access token
+mapboxgl.accessToken = 'pk.eyJ1IjoiYW5kYW1hZXpyYSIsImEiOiJjbWM3djMyamcwMmxuMmxzYTFsMThpNTJwIn0.9H7kNoaCYW0Kiw0wzrLfhQ'
 
 function FindRide() {
   const [fromLocation, setFromLocation] = useState('')
@@ -51,12 +12,13 @@ function FindRide() {
   const [selectedRouteId, setSelectedRouteId] = useState(null)
   const [hoveredRideId, setHoveredRideId] = useState(null)
   const [userLocation, setUserLocation] = useState(null)
-  const [mapCenter, setMapCenter] = useState([0.347596, 32.582520]) // Default to Kampala, Uganda
-  const [mapZoom, setMapZoom] = useState(12)
   const [locationError, setLocationError] = useState(null)
   const [destinationLocation, setDestinationLocation] = useState(null)
   const [isGettingLocation, setIsGettingLocation] = useState(false)
+  
+  const mapContainerRef = useRef()
   const mapRef = useRef()
+  const markersRef = useRef([])
 
   // Mock data for available rides with Uganda coordinates (Kampala area)
   const availableRides = [
@@ -68,7 +30,7 @@ function FindRide() {
       rating: 4.8,
       price: 25000, // UGX
       coordinates: {
-        from: [32.582520, 0.347596], // Kampala city center
+        from: [32.582520, 0.347596], // Kampala city center [lng, lat]
         to: [32.443606, 0.042068]   // Entebbe Airport
       },
       color: '#E6007A' // Primary color
@@ -118,54 +80,189 @@ function FindRide() {
     ? availableRides.filter(ride => ride.id === selectedRouteId)
     : availableRides
 
-  // Geolocation effect
+  // Initialize map
   useEffect(() => {
-    const getUserLocation = () => {
-      if (navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition(
-          (position) => {
-            const { latitude, longitude } = position.coords
-            setUserLocation([latitude, longitude])
-            setMapCenter([latitude, longitude])
-            setMapZoom(13)
-            setLocationError(null)
-          },
-          (error) => {
-            console.warn('Geolocation error:', error)
-            setLocationError('Unable to get your location. Using default location (Kampala).')
-            // Keep default Kampala coordinates
+    if (!mapContainerRef.current) return
+
+    // Initialize map with default location first
+    mapRef.current = new mapboxgl.Map({
+      container: mapContainerRef.current,
+      style: 'mapbox://styles/mapbox/streets-v12',
+      center: [32.582520, 0.347596], // Kampala default
+      zoom: 12
+    })
+
+    setupMapControls()
+
+    // Then try to get user's location
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          const { latitude, longitude } = position.coords
+          
+          // Fly to user's actual location
+          mapRef.current.flyTo({
+            center: [longitude, latitude],
+            zoom: 13,
+            duration: 2000
+          })
+
+          setUserLocation([latitude, longitude])
+          setLocationError(null)
+        },
+        (error) => {
+          console.warn('Geolocation error:', error)
+          
+          if (error.code === 1) {
+            setLocationError('Location access denied. Please enable location in your browser settings or click the location button on the map.')
+          } else if (error.code === 2) {
+            setLocationError('Location unavailable. Using default location.')
+          } else if (error.code === 3) {
+            setLocationError('Location request timeout. Using default location.')
+          } else {
+            setLocationError('Unable to get your location. Using default location.')
           }
-        )
-      } else {
-        setLocationError('Geolocation is not supported by this browser.')
+        },
+        {
+          enableHighAccuracy: true,
+          timeout: 10000,
+          maximumAge: 0
+        }
+      )
+    } else {
+      setLocationError('Geolocation is not supported by this browser.')
+    }
+
+    function setupMapControls() {
+      // Add navigation control
+      mapRef.current.addControl(new mapboxgl.NavigationControl(), 'top-right')
+
+      // Add geolocate control to track user's location
+      const geolocateControl = new mapboxgl.GeolocateControl({
+        positionOptions: {
+          enableHighAccuracy: true
+        },
+        trackUserLocation: true,
+        showUserHeading: true,
+        showAccuracyCircle: true
+      })
+      
+      mapRef.current.addControl(geolocateControl, 'top-right')
+
+      // Listen for geolocation events from the control
+      geolocateControl.on('geolocate', (e) => {
+        const { latitude, longitude } = e.coords
+        setUserLocation([latitude, longitude])
+        setLocationError(null)
+      })
+
+      geolocateControl.on('error', (e) => {
+        console.warn('Geolocation control error:', e)
+        if (e.code === 1) {
+          setLocationError('Location access denied. Click "Allow" when prompted or check your browser settings.')
+        }
+      })
+    }
+
+    return () => {
+      if (mapRef.current) {
+        mapRef.current.remove()
       }
     }
-
-    getUserLocation()
   }, [])
 
-  const handleSearch = () => {
-    // Search functionality to be implemented
-    console.log('Searching rides from', fromLocation, 'to', toLocation)
-    // Auto-center map on search results
-    if (mapRef.current && availableRides.length > 0) {
-      const bounds = L.latLngBounds(
-        availableRides.flatMap(ride => [
-          [ride.coordinates.from[1], ride.coordinates.from[0]],
-          [ride.coordinates.to[1], ride.coordinates.to[0]]
-        ])
-      )
-      mapRef.current.fitBounds(bounds, { padding: [20, 20] })
+  // Update markers and routes when data changes
+  useEffect(() => {
+    if (!mapRef.current) return
+
+    // Clear existing markers
+    markersRef.current.forEach(marker => marker.remove())
+    markersRef.current = []
+
+    // Add user location marker
+    if (userLocation) {
+      const el = document.createElement('div')
+      el.className = 'user-location-marker'
+      el.style.width = '20px'
+      el.style.height = '20px'
+      el.style.background = '#3B82F6'
+      el.style.border = '3px solid white'
+      el.style.borderRadius = '50%'
+      el.style.boxShadow = '0 2px 4px rgba(0,0,0,0.3)'
+
+      const marker = new mapboxgl.Marker(el)
+        .setLngLat([userLocation[1], userLocation[0]])
+        .setPopup(new mapboxgl.Popup().setHTML('<div><strong>Your Location</strong><br/>Current position</div>'))
+        .addTo(mapRef.current)
+      
+      markersRef.current.push(marker)
     }
+
+    // Add destination marker
+    if (destinationLocation) {
+      const el = document.createElement('div')
+      el.innerHTML = '📍'
+      el.style.fontSize = '24px'
+
+      const marker = new mapboxgl.Marker(el)
+        .setLngLat([destinationLocation[1], destinationLocation[0]])
+        .setPopup(new mapboxgl.Popup().setHTML(`<div><strong>Destination</strong><br/>${toLocation}</div>`))
+        .addTo(mapRef.current)
+      
+      markersRef.current.push(marker)
+    }
+
+    // Add ride markers and routes
+    filteredRides.forEach(ride => {
+      // Pickup marker (green)
+      const pickupEl = document.createElement('div')
+      pickupEl.style.width = '12px'
+      pickupEl.style.height = '12px'
+      pickupEl.style.background = selectedRouteId === ride.id ? '#E6007A' : '#10B981'
+      pickupEl.style.border = '2px solid white'
+      pickupEl.style.borderRadius = '50%'
+      pickupEl.style.boxShadow = '0 2px 4px rgba(0,0,0,0.3)'
+
+      const pickupMarker = new mapboxgl.Marker(pickupEl)
+        .setLngLat(ride.coordinates.from)
+        .setPopup(new mapboxgl.Popup().setHTML(`<div><strong>Pickup</strong><br/>${ride.from}<br/>${ride.driverName}</div>`))
+        .addTo(mapRef.current)
+      
+      markersRef.current.push(pickupMarker)
+
+      // Dropoff marker (red)
+      const dropoffEl = document.createElement('div')
+      dropoffEl.style.width = '12px'
+      dropoffEl.style.height = '12px'
+      dropoffEl.style.background = selectedRouteId === ride.id ? '#E6007A' : '#EF4444'
+      dropoffEl.style.border = '2px solid white'
+      dropoffEl.style.borderRadius = '50%'
+      dropoffEl.style.boxShadow = '0 2px 4px rgba(0,0,0,0.3)'
+
+      const dropoffMarker = new mapboxgl.Marker(dropoffEl)
+        .setLngLat(ride.coordinates.to)
+        .setPopup(new mapboxgl.Popup().setHTML(`<div><strong>Dropoff</strong><br/>${ride.to}<br/>${formatPrice(ride.price)}</div>`))
+        .addTo(mapRef.current)
+      
+      markersRef.current.push(dropoffMarker)
+    })
+  }, [filteredRides, userLocation, destinationLocation, selectedRouteId, hoveredRideId, toLocation])
+
+  const handleSearch = () => {
+    console.log('Searching rides from', fromLocation, 'to', toLocation)
   }
 
   const handleRequestRide = (rideId) => {
-    // Request ride functionality to be implemented
     console.log('Requesting ride with ID:', rideId)
   }
 
   const toggleMapExpansion = () => {
     setIsMapExpanded(!isMapExpanded)
+    setTimeout(() => {
+      if (mapRef.current) {
+        mapRef.current.resize()
+      }
+    }, 300)
   }
 
   const handleRouteClick = (rideId) => {
@@ -178,10 +275,8 @@ function FindRide() {
 
   const handleFromInputClick = () => {
     if (userLocation) {
-      // If we already have the user's location, use it
       setFromLocation('Your Current Location')
     } else {
-      // Try to get the user's location
       setIsGettingLocation(true)
       if (navigator.geolocation) {
         navigator.geolocation.getCurrentPosition(
@@ -194,7 +289,7 @@ function FindRide() {
           },
           (error) => {
             console.warn('Geolocation error:', error)
-            setFromLocation('') // Clear the input
+            setFromLocation('')
             setIsGettingLocation(false)
             setLocationError('Unable to get your location. Please enter manually.')
           }
@@ -207,7 +302,6 @@ function FindRide() {
     }
   }
 
-  // Simple geocoding simulation for Uganda locations
   const geocodeLocation = async (locationName) => {
     const ugandaLocations = {
       'kampala': [0.347596, 32.582520],
@@ -244,8 +338,6 @@ function FindRide() {
     }
   }
 
-
-
   const renderStars = (rating) => {
     const stars = []
     const fullStars = Math.floor(rating)
@@ -277,32 +369,6 @@ function FindRide() {
 
   return (
     <div className="bg-gray-50 min-h-screen py-8">
-      <style>{`
-        .custom-marker {
-          background: transparent !important;
-          border: none !important;
-        }
-        .user-location-marker, .destination-marker {
-          background: transparent !important;
-          border: none !important;
-        }
-        .leaflet-popup-content-wrapper {
-          border-radius: 8px;
-        }
-        .leaflet-popup-tip {
-          background: white;
-        }
-        @keyframes pulse {
-          0% {
-            transform: scale(1);
-            opacity: 1;
-          }
-          100% {
-            transform: scale(2);
-            opacity: 0;
-          }
-        }
-      `}</style>
       <div className="max-w-6xl mx-auto px-4">
         {/* Header with Map */}
         <div className="bg-white rounded-lg shadow-md mb-8 overflow-hidden">
@@ -333,199 +399,31 @@ function FindRide() {
             </button>
           </div>
 
-          {/* Map Container */}
+          {/* Mapbox Map Container */}
           <div 
             className={`transition-all duration-300 ease-in-out overflow-hidden ${
               isMapExpanded 
-                ? 'h-80 sm:h-96 lg:h-[500px]' // More height on desktop
-                : 'h-32 sm:h-40 lg:h-48'      // Responsive collapsed height
+                ? 'h-80 sm:h-96 lg:h-[500px]'
+                : 'h-32 sm:h-40 lg:h-48'
             }`}
           >
-            <div className="h-full w-full relative">
-              <MapContainer
-                ref={mapRef}
-                center={mapCenter}
-                zoom={mapZoom}
-                style={{ height: '100%', width: '100%' }}
-                zoomControl={isMapExpanded}
-                attributionControl={false}
-              >
-                <MapUpdater center={mapCenter} zoom={mapZoom} />
-                {/* Mapbox Tile Layer */}
-                <TileLayer
-                  url={`https://api.mapbox.com/styles/v1/mapbox/light-v11/tiles/{z}/{x}/{y}?access_token=${MAPBOX_TOKEN}`}
-                  attribution='© <a href="https://www.mapbox.com/">Mapbox</a> © <a href="https://www.openstreetmap.org/">OpenStreetMap</a>'
-                />
-
-                {/* User Location Marker */}
-                {userLocation && (
-                  <Marker
-                    position={userLocation}
-                    icon={L.divIcon({
-                      html: `
-                        <div style="
-                          width: 20px; 
-                          height: 20px; 
-                          background: #3B82F6; 
-                          border: 3px solid white; 
-                          border-radius: 50%; 
-                          box-shadow: 0 2px 4px rgba(0,0,0,0.3);
-                          position: relative;
-                        ">
-                          <div style="
-                            width: 40px; 
-                            height: 40px; 
-                            background: rgba(59, 130, 246, 0.2); 
-                            border-radius: 50%; 
-                            position: absolute; 
-                            top: -13px; 
-                            left: -13px;
-                            animation: pulse 2s infinite;
-                          "></div>
-                        </div>
-                      `,
-                      className: 'user-location-marker',
-                      iconSize: [20, 20],
-                      iconAnchor: [10, 10],
-                    })}
-                  >
-                    <Popup>
-                      <div className="text-center">
-                        <div className="font-semibold text-blue-600">Your Location</div>
-                        <div className="text-sm text-gray-600">Current position</div>
-                      </div>
-                    </Popup>
-                  </Marker>
-                )}
-
-                {/* Destination Marker */}
-                {destinationLocation && (
-                  <Marker
-                    position={destinationLocation}
-                    icon={L.divIcon({
-                      html: `
-                        <div style="
-                          width: 24px; 
-                          height: 24px; 
-                          background: #EF4444; 
-                          border: 3px solid white; 
-                          border-radius: 50%; 
-                          box-shadow: 0 2px 4px rgba(0,0,0,0.3);
-                          display: flex;
-                          align-items: center;
-                          justify-content: center;
-                          color: white;
-                          font-size: 12px;
-                          font-weight: bold;
-                        ">📍</div>
-                      `,
-                      className: 'destination-marker',
-                      iconSize: [24, 24],
-                      iconAnchor: [12, 12],
-                    })}
-                  >
-                    <Popup>
-                      <div className="text-center">
-                        <div className="font-semibold text-red-600">Destination</div>
-                        <div>{toLocation}</div>
-                        <div className="text-sm text-gray-600">Where you want to go</div>
-                      </div>
-                    </Popup>
-                  </Marker>
-                )}
-
-                {/* Route Lines */}
-                {availableRides.map((ride) => (
-                  <Polyline
-                    key={`route-${ride.id}`}
-                    positions={[
-                      [ride.coordinates.from[1], ride.coordinates.from[0]],
-                      [ride.coordinates.to[1], ride.coordinates.to[0]]
-                    ]}
-                    color={
-                      selectedRouteId === ride.id 
-                        ? '#E6007A' 
-                        : hoveredRideId === ride.id 
-                        ? '#F472B6' 
-                        : ride.color
-                    }
-                    weight={
-                      selectedRouteId === ride.id 
-                        ? 6 
-                        : hoveredRideId === ride.id 
-                        ? 5 
-                        : 3
-                    }
-                    opacity={
-                      selectedRouteId === ride.id 
-                        ? 1 
-                        : hoveredRideId === ride.id 
-                        ? 0.9 
-                        : 0.7
-                    }
-                    eventHandlers={{
-                      click: () => handleRouteClick(ride.id),
-                      mouseover: () => setHoveredRideId(ride.id),
-                      mouseout: () => setHoveredRideId(null)
-                    }}
-                  />
-                ))}
-
-                {/* Pickup and Dropoff Markers */}
-                {availableRides.map((ride) => (
-                  <React.Fragment key={`markers-${ride.id}`}>
-                    {/* Pickup Marker */}
-                    <Marker
-                      position={[ride.coordinates.from[1], ride.coordinates.from[0]]}
-                      icon={createCustomIcon(
-                        selectedRouteId === ride.id ? '#E6007A' : ride.color, 
-                        true
-                      )}
-                    >
-                      <Popup>
-                        <div className="text-center">
-                          <div className="font-semibold text-green-600">Pickup</div>
-                          <div>{ride.from}</div>
-                          <div className="text-sm text-gray-600">{ride.driverName}</div>
-                        </div>
-                      </Popup>
-                    </Marker>
-                    
-                    {/* Dropoff Marker */}
-                    <Marker
-                      position={[ride.coordinates.to[1], ride.coordinates.to[0]]}
-                      icon={createCustomIcon(
-                        selectedRouteId === ride.id ? '#E6007A' : ride.color, 
-                        false
-                      )}
-                    >
-                      <Popup>
-                        <div className="text-center">
-                          <div className="font-semibold text-red-600">Dropoff</div>
-                          <div>{ride.to}</div>
-                          <div className="text-sm text-gray-600">{formatPrice(ride.price)}</div>
-                        </div>
-                      </Popup>
-                    </Marker>
-                  </React.Fragment>
-                ))}
-              </MapContainer>
-
-
-
-              {/* Route Counter */}
-              {selectedRouteId && (
-                <div className="absolute top-4 right-4 bg-primary text-white rounded-lg px-3 py-1 text-sm font-medium">
-                  Showing route {selectedRouteId}
-                  <button 
-                    onClick={() => setSelectedRouteId(null)}
-                    className="ml-2 hover:text-gray-200"
-                  >
-                    ✕
-                  </button>
-                </div>
-              )}
-            </div>
+            <div 
+              ref={mapContainerRef} 
+              className="h-full w-full"
+            />
+            
+            {/* Route Counter */}
+            {selectedRouteId && (
+              <div className="absolute top-4 right-4 bg-primary text-white rounded-lg px-3 py-1 text-sm font-medium z-10">
+                Showing route {selectedRouteId}
+                <button 
+                  onClick={() => setSelectedRouteId(null)}
+                  className="ml-2 hover:text-gray-200"
+                >
+                  ✕
+                </button>
+              </div>
+            )}
           </div>
         </div>
 
@@ -617,7 +515,7 @@ function FindRide() {
                 onClick={() => handleRouteClick(ride.id)}
               >
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-center">
-                  {/* Column 1: From/To without Dots */}
+                  {/* Column 1: From/To */}
                   <div className="space-y-1">
                     <div className="flex items-center space-x-2">
                       <span className="text-gray-600 text-sm">From:</span>
@@ -644,7 +542,10 @@ function FindRide() {
                       {formatPrice(ride.price)}
                     </div>
                     <button
-                      onClick={() => handleRequestRide(ride.id)}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        handleRequestRide(ride.id)
+                      }}
                       className="bg-primary text-white px-6 py-2 rounded-lg font-medium hover:bg-opacity-90 transition-colors"
                     >
                       Request Ride
@@ -657,22 +558,8 @@ function FindRide() {
 
           {filteredRides.length === 0 && (
             <div className="text-center py-12">
-              {selectedRouteId ? (
-                <>
-                  <p className="text-gray-500 text-lg">No rides found for the selected route.</p>
-                  <button 
-                    onClick={() => setSelectedRouteId(null)}
-                    className="text-primary hover:text-opacity-80 text-sm mt-2 underline"
-                  >
-                    Show all rides
-                  </button>
-                </>
-              ) : (
-                <>
-                  <p className="text-gray-500 text-lg">No rides available at the moment.</p>
-                  <p className="text-gray-400 text-sm mt-2">Try adjusting your search criteria.</p>
-                </>
-              )}
+              <p className="text-gray-500 text-lg">No rides available at the moment.</p>
+              <p className="text-gray-400 text-sm mt-2">Try adjusting your search criteria.</p>
             </div>
           )}
 
@@ -684,7 +571,7 @@ function FindRide() {
                   <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
                 </svg>
                 <span className="text-sm font-medium">
-                  Tip: Click on map routes or hover over ride cards to see connections!
+                  Tip: Click on ride cards to highlight them on the map!
                 </span>
               </div>
             </div>

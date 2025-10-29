@@ -26,14 +26,20 @@ function Navbar() {
         
         {/* Navigation Items */}
         <div className="hidden md:flex items-center text-sm space-x-8">
-          <Link to="/" className="text-gray-700 hover:text-primary transition-colors ">
-            Home
+          <Link to="/" className="group relative w-max">
+            <span className="text-gray-700 hover:text-primary transition-colors">Home</span>
+            <span className="absolute -bottom-1 left-1/2 w-0 transition-all h-0.5 bg-primary group-hover:w-3/6"></span>
+            <span className="absolute -bottom-1 right-1/2 w-0 transition-all h-0.5 bg-primary group-hover:w-3/6"></span>
           </Link>
-          <Link to="/find-ride" className="text-gray-700 hover:text-primary transition-colors">
-            Find a Ride
+          <Link to="/find-ride" className="group relative w-max">
+            <span className="text-gray-700 hover:text-primary transition-colors">Find a Ride</span>
+            <span className="absolute -bottom-1 left-1/2 w-0 transition-all h-0.5 bg-primary group-hover:w-3/6"></span>
+            <span className="absolute -bottom-1 right-1/2 w-0 transition-all h-0.5 bg-primary group-hover:w-3/6"></span>
           </Link>
-          <Link to="/offer-ride" className="text-gray-700 hover:text-primary transition-colors">
-            Offer a Ride
+          <Link to="/offer-ride" className="group relative w-max">
+            <span className="text-gray-700 hover:text-primary transition-colors">Offer a Ride</span>
+            <span className="absolute -bottom-1 left-1/2 w-0 transition-all h-0.5 bg-primary group-hover:w-3/6"></span>
+            <span className="absolute -bottom-1 right-1/2 w-0 transition-all h-0.5 bg-primary group-hover:w-3/6"></span>
           </Link>
           
           {selectedAccount ? (

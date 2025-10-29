@@ -56,7 +56,7 @@ function Welcome() {
               </div>
               
               <div className="flex flex-row gap-3 md:gap-4">
-                <Link to="/find-ride" className="flex-1 bg-primary text-white px-1 md:px-8 py-1 md:py-4 rounded-full text-sm md:text-lg font-semibold hover:bg-opacity-90 transition-colors text-center">
+                <Link to="/find-ride" className="flex-1 bg-primary text-white px-1 md:px-2 py-1 md:py-4 rounded-full text-sm md:text-lg font-semibold hover:bg-opacity-90 transition-colors text-center">
                   Find a Ride
                 </Link>
                 <Link to="/offer-ride" className="flex-1 border-2 border-primary text-primary px-2 md:px-8 py-3 md:py-4 rounded-full text-sm md:text-lg font-semibold hover:bg-primary hover:text-white transition-colors text-center">
@@ -65,6 +65,72 @@ function Welcome() {
               </div>
             </div>
           </div>
+        </div>
+      </section>
+
+      {/* Powered by Polkadot Section */}
+      <section className="py-12 md:py-20 px-6 bg-gradient-to-r from-black via-gray-900 to-black relative overflow-hidden">
+        {/* Decorative Polkadot Coins */}
+        <img 
+          src="/polkadot-dot.png" 
+          alt="Polkadot" 
+          className="absolute top-10 left-10 w-16 md:w-24 opacity-20 animate-pulse"
+        />
+        <img 
+          src="/polka-dot.png" 
+          alt="Polkadot" 
+          className="absolute bottom-10 right-10 w-20 md:w-32 opacity-20 animate-pulse"
+        />
+        
+        <div className="max-w-7xl mx-auto relative z-10">
+          <div className="text-center mb-8 md:mb-12">
+            <h2 className="text-3xl md:text-5xl font-bold text-white mb-4">
+              Powered by <span className="text-primary">Polkadot</span>
+            </h2>
+            <p className="text-lg md:text-xl text-gray-300 max-w-3xl mx-auto">
+              Built on the cutting-edge Polkadot blockchain, ensuring security, transparency, and true decentralization for every ride.
+            </p>
+          </div>
+
+          <div className="grid md:grid-cols-3 gap-6 md:gap-8">
+            <div className="bg-white/5 backdrop-blur-sm p-6 md:p-8 rounded-xl border border-white/10 hover:border-primary/50 transition-all">
+              <div className="w-14 h-14 bg-primary bg-opacity-20 rounded-full flex items-center justify-center mx-auto mb-4">
+                <svg className="w-7 h-7 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                </svg>
+              </div>
+              <h3 className="text-xl font-bold text-white mb-3 text-center">Secure Transactions</h3>
+              <p className="text-gray-300 text-center">
+                Smart contracts ensure your funds are safe with escrow-based payments that release only when both parties confirm.
+              </p>
+            </div>
+
+            <div className="bg-white/5 backdrop-blur-sm p-6 md:p-8 rounded-xl border border-white/10 hover:border-primary/50 transition-all">
+              <div className="w-14 h-14 bg-primary bg-opacity-20 rounded-full flex items-center justify-center mx-auto mb-4">
+                <svg className="w-7 h-7 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                </svg>
+              </div>
+              <h3 className="text-xl font-bold text-white mb-3 text-center">Trustless System</h3>
+              <p className="text-gray-300 text-center">
+                No intermediaries. Blockchain technology eliminates the need for trust, ensuring fair and transparent rides.
+              </p>
+            </div>
+
+            <div className="bg-white/5 backdrop-blur-sm p-6 md:p-8 rounded-xl border border-white/10 hover:border-primary/50 transition-all">
+              <div className="w-14 h-14 bg-primary bg-opacity-20 rounded-full flex items-center justify-center mx-auto mb-4">
+                <svg className="w-7 h-7 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                </svg>
+              </div>
+              <h3 className="text-xl font-bold text-white mb-3 text-center">Fast & Scalable</h3>
+              <p className="text-gray-300 text-center">
+                Polkadot's multi-chain architecture delivers lightning-fast transactions with minimal fees, no matter the load.
+              </p>
+            </div>
+          </div>
+
+          
         </div>
       </section>
 
