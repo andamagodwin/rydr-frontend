@@ -1,9 +1,16 @@
 import React, { useState, useRef, useEffect } from 'react'
 import mapboxgl from 'mapbox-gl'
 import 'mapbox-gl/dist/mapbox-gl.css'
+import { Check } from 'lucide-react'
 
 // Mapbox access token
 mapboxgl.accessToken = 'pk.eyJ1IjoiYW5kYW1hZXpyYSIsImEiOiJjbWM3djMyamcwMmxuMmxzYTFsMThpNTJwIn0.9H7kNoaCYW0Kiw0wzrLfhQ'
+
+// Stepper configuration
+const STEPS = [
+  { id: 1, name: 'Ride Details', description: 'Driver & Vehicle Info' },
+  { id: 2, name: 'Trip Information', description: 'Route & Pricing' }
+]
 
 // Generate UUID v4 for session token
 const generateSessionToken = () => {
@@ -16,6 +23,16 @@ const generateSessionToken = () => {
 
 function OfferRide() {
   const [formData, setFormData] = useState({
+    // Driver Info
+    driverName: '',
+    driverPhone: '',
+    // Vehicle Info
+    vehicleType: '',
+    vehicleMake: '',
+    vehicleModel: '',
+    vehicleColor: '',
+    registrationNumber: '',
+    // Trip Info
     from: '',
     to: '',
     date: '',
@@ -28,6 +45,7 @@ function OfferRide() {
   const [dropoffLocation, setDropoffLocation] = useState(null)
   const [locationError, setLocationError] = useState(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [currentStep, setCurrentStep] = useState(1)
   
   // Autocomplete state
   const [fromSuggestions, setFromSuggestions] = useState([])
@@ -43,9 +61,14 @@ function OfferRide() {
   const fromInputRef = useRef()
   const toInputRef = useRef()
 
-  // Initialize map (run once)
+  // Initialize map when Trip Information step is active (ensures container exists)
   useEffect(() => {
+    if (currentStep !== 2) return
     if (!mapContainerRef.current) return
+    if (mapRef.current) {
+      try { mapRef.current.resize() } catch { /* ignore resize errors when container toggles */ void 0 }
+      return
+    }
 
     mapRef.current = new mapboxgl.Map({
       container: mapContainerRef.current,
@@ -54,19 +77,14 @@ function OfferRide() {
       zoom: 12
     })
 
-    // Add navigation control
+    // Add navigation and geolocate controls
     mapRef.current.addControl(new mapboxgl.NavigationControl(), 'top-right')
-
-    // Add geolocate control
     const geolocateControl = new mapboxgl.GeolocateControl({
-      positionOptions: {
-        enableHighAccuracy: true
-      },
+      positionOptions: { enableHighAccuracy: true },
       trackUserLocation: true,
       showUserHeading: true,
       showAccuracyCircle: true
     })
-    
     mapRef.current.addControl(geolocateControl, 'top-right')
 
     // Try to get user's location
@@ -74,11 +92,7 @@ function OfferRide() {
       navigator.geolocation.getCurrentPosition(
         (position) => {
           const { latitude, longitude } = position.coords
-          mapRef.current.flyTo({
-            center: [longitude, latitude],
-            zoom: 13,
-            duration: 2000
-          })
+          mapRef.current.flyTo({ center: [longitude, latitude], zoom: 13, duration: 2000 })
           setLocationError(null)
         },
         (error) => {
@@ -91,16 +105,9 @@ function OfferRide() {
     // Click on map to set pickup/dropoff locations
     mapRef.current.on('click', (e) => {
       const { lng, lat } = e.lngLat
-
-      // If pickup marker not set, set pickup
       if (!pickupMarkerRef.current) {
         setPickupLocation([lng, lat])
-        
-        // Add pickup marker
-        if (pickupMarkerRef.current) {
-          pickupMarkerRef.current.remove()
-        }
-        
+        if (pickupMarkerRef.current) pickupMarkerRef.current.remove()
         const el = document.createElement('div')
         el.style.width = '30px'
         el.style.height = '30px'
@@ -109,21 +116,13 @@ function OfferRide() {
         el.style.borderRadius = '50%'
         el.style.boxShadow = '0 2px 4px rgba(0,0,0,0.3)'
         el.style.cursor = 'pointer'
-
         pickupMarkerRef.current = new mapboxgl.Marker(el)
           .setLngLat([lng, lat])
           .setPopup(new mapboxgl.Popup().setHTML('<strong>Pickup Location</strong>'))
           .addTo(mapRef.current)
-      }
-      // If pickup exists but dropoff marker not set, set dropoff
-      else if (!dropoffMarkerRef.current) {
+      } else if (!dropoffMarkerRef.current) {
         setDropoffLocation([lng, lat])
-        
-        // Add dropoff marker
-        if (dropoffMarkerRef.current) {
-          dropoffMarkerRef.current.remove()
-        }
-        
+        if (dropoffMarkerRef.current) dropoffMarkerRef.current.remove()
         const el = document.createElement('div')
         el.style.width = '30px'
         el.style.height = '30px'
@@ -132,20 +131,13 @@ function OfferRide() {
         el.style.borderRadius = '50%'
         el.style.boxShadow = '0 2px 4px rgba(0,0,0,0.3)'
         el.style.cursor = 'pointer'
-
         dropoffMarkerRef.current = new mapboxgl.Marker(el)
           .setLngLat([lng, lat])
           .setPopup(new mapboxgl.Popup().setHTML('<strong>Dropoff Location</strong>'))
           .addTo(mapRef.current)
       }
     })
-
-    return () => {
-      if (mapRef.current) {
-        mapRef.current.remove()
-      }
-    }
-  }, [])
+  }, [currentStep])
 
   // Debounced search for location suggestions
   useEffect(() => {
@@ -329,6 +321,20 @@ function OfferRide() {
     }))
   }
 
+  // Step navigation
+  const handleNext = () => {
+    // Validate Step 1 required fields
+    if (currentStep === 1) {
+      if (!formData.driverName || !formData.vehicleType || !formData.registrationNumber) {
+        alert('Please fill in Driver Name, Vehicle Type, and Registration Number')
+        return
+      }
+    }
+    setCurrentStep((s) => Math.min(s + 1, STEPS.length))
+  }
+
+  const handlePrevious = () => setCurrentStep((s) => Math.max(s - 1, 1))
+
   const resetLocations = () => {
     setPickupLocation(null)
     setDropoffLocation(null)
@@ -385,6 +391,13 @@ function OfferRide() {
       
       // Reset form
       setFormData({
+        driverName: '',
+        driverPhone: '',
+        vehicleType: '',
+        vehicleMake: '',
+        vehicleModel: '',
+        vehicleColor: '',
+        registrationNumber: '',
         from: '',
         to: '',
         date: '',
@@ -394,6 +407,7 @@ function OfferRide() {
         description: ''
       })
       resetLocations()
+      setCurrentStep(1)
     }, 1500)
   }
 
@@ -535,12 +549,215 @@ function OfferRide() {
           <p className="text-gray-600">Share your journey and earn rewards while helping others</p>
         </div>
 
+        {/* Enhanced Stepper */}
+        <div className="mb-12">
+          <div className="max-w-3xl mx-auto">
+            <div className="relative flex items-center justify-between">
+              {/* Progress Bar Background */}
+              <div className="absolute top-6 left-0 right-0 h-1 bg-gray-200 rounded-full" style={{ zIndex: 0 }}>
+                <div 
+                  className="h-full bg-gradient-to-r from-primary to-pink-600 rounded-full transition-all duration-500 ease-out"
+                  style={{ width: `${((currentStep - 1) / (STEPS.length - 1)) * 100}%` }}
+                />
+              </div>
+
+              {STEPS.map((step) => (
+                <div key={step.id} className="flex flex-col items-center relative" style={{ zIndex: 1 }}>
+                  {/* Step Circle */}
+                  <div className="group cursor-pointer">
+                    <div className={`
+                      w-14 h-14 rounded-full flex items-center justify-center border-3 
+                      transition-all duration-300 transform
+                      ${currentStep > step.id
+                        ? 'bg-gradient-to-br from-primary to-pink-600 border-primary text-white scale-100 shadow-lg'
+                        : currentStep === step.id
+                        ? 'bg-white border-primary text-primary shadow-xl scale-110 ring-4 ring-pink-100'
+                        : 'bg-white border-gray-300 text-gray-400 scale-90 hover:scale-100 hover:border-gray-400'
+                      }
+                    `}>
+                      {currentStep > step.id ? (
+                        <Check className="w-7 h-7 animate-in zoom-in duration-300" strokeWidth={3} />
+                      ) : (
+                        <span className="font-bold text-lg">{step.id}</span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Step Label */}
+                  <div className="mt-3 text-center max-w-[120px]">
+                    <p className={`
+                      font-bold text-sm transition-all duration-300
+                      ${currentStep >= step.id ? 'text-primary' : 'text-gray-400'}
+                      ${currentStep === step.id ? 'scale-105' : 'scale-100'}
+                    `}>
+                      {step.name}
+                    </p>
+                    
+                  </div>
+
+                  {/* Active Step Indicator */}
+                  {currentStep === step.id && (
+                    <div className="absolute -bottom-2 w-2 h-2 bg-primary rounded-full animate-bounce" />
+                  )}
+                </div>
+              ))}
+            </div>
+
+            {/* Step Counter */}
+            <div className="text-center mt-6">
+              <p className="text-sm text-gray-500">
+                Step <span className="font-bold text-primary">{currentStep}</span> of <span className="font-bold">{STEPS.length}</span>
+              </p>
+            </div>
+          </div>
+        </div>
+
         <div className="grid lg:grid-cols-2 gap-8">
           {/* Left Column - Form */}
-          <div className="bg-white rounded-lg shadow-md p-6">
-            <h2 className="text-2xl font-bold text-gray-800 mb-6">Ride Details</h2>
-            
+          <div>
             <form onSubmit={handleSubmit} className="space-y-6">
+              {/* Step 1: Ride Details */}
+              {currentStep === 1 && (
+                <div className="space-y-6">
+                  <h2 className="text-2xl font-bold text-gray-800">Ride Details</h2>
+                  {/* Driver Information Section */}
+                  <div className="bg-gray-50 rounded-lg p-4 space-y-4">
+                    <h3 className="text-lg font-semibold text-gray-800 mb-3">Driver Information</h3>
+                
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label htmlFor="driverName" className="block text-sm font-medium text-gray-700 mb-2">
+                      Full Name *
+                    </label>
+                    <input
+                      type="text"
+                      id="driverName"
+                      name="driverName"
+                      value={formData.driverName}
+                      onChange={handleInputChange}
+                      placeholder="Jovia Doe"
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary transition-colors"
+                      required
+                    />
+                  </div>
+                  
+                  <div>
+                    <label htmlFor="driverPhone" className="block text-sm font-medium text-gray-700 mb-2">
+                      Phone Number
+                    </label>
+                    <input
+                      type="tel"
+                      id="driverPhone"
+                      name="driverPhone"
+                      value={formData.driverPhone}
+                      onChange={handleInputChange}
+                      placeholder="+256 700 000 000"
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary transition-colors"
+                    />
+                  </div>
+                </div>
+              </div>
+
+                  {/* Vehicle Information Section */}
+                  <div className="bg-gray-50 rounded-lg p-4 space-y-4">
+                    <h3 className="text-lg font-semibold text-gray-800 mb-3">Vehicle Information</h3>
+                
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label htmlFor="vehicleType" className="block text-sm font-medium text-gray-700 mb-2">
+                      Vehicle Type *
+                    </label>
+                    <select
+                      id="vehicleType"
+                      name="vehicleType"
+                      value={formData.vehicleType}
+                      onChange={handleInputChange}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary transition-colors"
+                      required
+                    >
+                      <option value="">Select vehicle type</option>
+                      <option value="Sedan">Sedan</option>
+                      <option value="SUV">SUV</option>
+                      <option value="Hatchback">Hatchback</option>
+                      <option value="Van">Van</option>
+                      <option value="Pickup">Pickup Truck</option>
+                      <option value="Motorcycle">Motorcycle</option>
+                      <option value="Other">Other</option>
+                    </select>
+                  </div>
+                  
+                  <div>
+                    <label htmlFor="registrationNumber" className="block text-sm font-medium text-gray-700 mb-2">
+                      Registration Number *
+                    </label>
+                    <input
+                      type="text"
+                      id="registrationNumber"
+                      name="registrationNumber"
+                      value={formData.registrationNumber}
+                      onChange={handleInputChange}
+                      placeholder="UAX 123A"
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary transition-colors uppercase"
+                      required
+                    />
+                  </div>
+                </div>
+                
+                <div className="grid grid-cols-3 gap-4">
+                  <div>
+                    <label htmlFor="vehicleMake" className="block text-sm font-medium text-gray-700 mb-2">
+                      Make
+                    </label>
+                    <input
+                      type="text"
+                      id="vehicleMake"
+                      name="vehicleMake"
+                      value={formData.vehicleMake}
+                      onChange={handleInputChange}
+                      placeholder="Toyota"
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary transition-colors"
+                    />
+                  </div>
+                  
+                  <div>
+                    <label htmlFor="vehicleModel" className="block text-sm font-medium text-gray-700 mb-2">
+                      Model
+                    </label>
+                    <input
+                      type="text"
+                      id="vehicleModel"
+                      name="vehicleModel"
+                      value={formData.vehicleModel}
+                      onChange={handleInputChange}
+                      placeholder="Corolla"
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary transition-colors"
+                    />
+                  </div>
+                  
+                  <div>
+                    <label htmlFor="vehicleColor" className="block text-sm font-medium text-gray-700 mb-2">
+                      Color
+                    </label>
+                    <input
+                      type="text"
+                      id="vehicleColor"
+                      name="vehicleColor"
+                      value={formData.vehicleColor}
+                      onChange={handleInputChange}
+                      placeholder="White"
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary transition-colors"
+                    />
+                  </div>
+                  </div>
+                </div>
+              </div>
+              )}
+
+              {/* Step 2: Trip Information */}
+              {currentStep === 2 && (
+                <div className="space-y-6">
+                  <h2 className="text-2xl font-bold text-gray-800">Trip Information</h2>
+              
               {/* From Location */}
               <div className="relative">
                 <label htmlFor="from" className="block text-sm font-medium text-gray-700 mb-2">
@@ -626,7 +843,6 @@ function OfferRide() {
                   {dropoffLocation ? '✓ Dropoff point marked on map' : 'Type at least 3 characters to search'}
                 </p>
               </div>
-
               {/* Date and Time */}
               <div className="grid grid-cols-2 gap-4">
                 <div>
@@ -715,44 +931,69 @@ function OfferRide() {
                 />
               </div>
 
-              {/* Reset Locations Button */}
-              {(pickupLocation || dropoffLocation) && (
-                <button
-                  type="button"
-                  onClick={resetLocations}
-                  className="w-full bg-gray-100 text-gray-700 px-6 py-3 rounded-lg font-medium hover:bg-gray-200 transition-colors"
-                >
-                  Reset Map Locations
-                </button>
+                  {/* Reset Locations Button */}
+                  {(pickupLocation || dropoffLocation) && (
+                    <button
+                      type="button"
+                      onClick={resetLocations}
+                      className="w-full bg-gray-100 text-gray-700 px-6 py-3 rounded-lg font-medium hover:bg-gray-200 transition-colors"
+                    >
+                      Reset Map Locations
+                    </button>
+                  )}
+
+                  {/* Submit Button */}
+                  <button
+                    type="submit"
+                    disabled={isSubmitting || !pickupLocation || !dropoffLocation}
+                    className={`w-full px-6 py-4 rounded-lg font-semibold text-lg transition-colors ${
+                      isSubmitting || !pickupLocation || !dropoffLocation
+                        ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                        : 'bg-primary text-white hover:bg-opacity-90'
+                    }`}
+                  >
+                    {isSubmitting ? (
+                      <span className="flex items-center justify-center">
+                        <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        Posting Ride...
+                      </span>
+                    ) : (
+                      'Post Ride'
+                    )}
+                  </button>
+                </div>
               )}
 
-              {/* Submit Button */}
-              <button
-                type="submit"
-                disabled={isSubmitting || !pickupLocation || !dropoffLocation}
-                className={`w-full px-6 py-4 rounded-lg font-semibold text-lg transition-colors ${
-                  isSubmitting || !pickupLocation || !dropoffLocation
-                    ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                    : 'bg-primary text-white hover:bg-opacity-90'
-                }`}
-              >
-                {isSubmitting ? (
-                  <span className="flex items-center justify-center">
-                    <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
-                    Posting Ride...
-                  </span>
-                ) : (
-                  'Post Ride'
+              {/* Navigation Buttons */}
+              <div className="flex justify-between pt-4 border-t border-gray-200">
+                {currentStep > 1 && (
+                  <button
+                    type="button"
+                    onClick={handlePrevious}
+                    className="px-6 py-3 border-2 border-primary text-primary rounded-lg hover:bg-pink-50 font-semibold"
+                  >
+                    Previous
+                  </button>
                 )}
-              </button>
+
+                {currentStep < STEPS.length ? (
+                  <button
+                    type="button"
+                    onClick={handleNext}
+                    className="ml-auto px-8 py-3 bg-primary text-white rounded-lg hover:bg-opacity-90 font-semibold"
+                  >
+                    Next Step
+                  </button>
+                ) : null}
+              </div>
             </form>
           </div>
 
-          {/* Right Column - Map */}
-          <div className="bg-white rounded-lg shadow-md overflow-hidden">
+          {/* Right Column - Map (only show visually on Step 2) */}
+          <div className={`${currentStep === 2 ? 'block' : 'hidden'} bg-white rounded-lg shadow-md overflow-hidden`}>
             <div className="p-6 border-b border-gray-200">
               <h2 className="text-2xl font-bold text-gray-800 mb-2">Select Route on Map</h2>
               <div className="space-y-2">
