@@ -80,39 +80,43 @@ function FindRide() {
     ? availableRides.filter(ride => ride.id === selectedRouteId)
     : availableRides
 
-  // Initialize map
+  // Initialize map - default to user's current location when available
   useEffect(() => {
     if (!mapContainerRef.current) return
 
-    // Initialize map with default location first
-    mapRef.current = new mapboxgl.Map({
-      container: mapContainerRef.current,
-      style: 'mapbox://styles/mapbox/streets-v12',
-      center: [32.582520, 0.347596], // Kampala default
-      zoom: 12
-    })
+    let destroyed = false
 
-    setupMapControls()
+    // Promise wrapper for geolocation with timeout
+    const getCurrentPositionAsync = (options) =>
+      new Promise((resolve, reject) => {
+        if (!('geolocation' in navigator)) {
+          reject({ code: -1, message: 'Geolocation unsupported' })
+          return
+        }
+        navigator.geolocation.getCurrentPosition(resolve, reject, options)
+      })
 
-    // Then try to get user's location
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          const { latitude, longitude } = position.coords
-          
-          // Fly to user's actual location
-          mapRef.current.flyTo({
-            center: [longitude, latitude],
-            zoom: 13,
-            duration: 2000
-          })
+    const initMap = async () => {
+      setIsGettingLocation(true)
 
-          setUserLocation([latitude, longitude])
-          setLocationError(null)
-        },
-        (error) => {
-          console.warn('Geolocation error:', error)
-          
+      // Kampala fallback [lng, lat]
+      let startCenter = [32.582520, 0.347596]
+      let startZoom = 12
+
+      try {
+        const pos = await getCurrentPositionAsync({
+          enableHighAccuracy: true,
+          timeout: 8000,
+          maximumAge: 0,
+        })
+        const { latitude, longitude } = pos.coords
+        startCenter = [longitude, latitude]
+        startZoom = 13
+        setUserLocation([latitude, longitude])
+        setLocationError(null)
+      } catch (error) {
+        console.warn('Initial geolocation error:', error)
+        if (error && typeof error.code === 'number') {
           if (error.code === 1) {
             setLocationError('Location access denied. Please enable location in your browser settings or click the location button on the map.')
           } else if (error.code === 2) {
@@ -122,15 +126,22 @@ function FindRide() {
           } else {
             setLocationError('Unable to get your location. Using default location.')
           }
-        },
-        {
-          enableHighAccuracy: true,
-          timeout: 10000,
-          maximumAge: 0
+        } else {
+          setLocationError('Geolocation is not supported by this browser.')
         }
-      )
-    } else {
-      setLocationError('Geolocation is not supported by this browser.')
+      } finally {
+        if (!destroyed && mapContainerRef.current) {
+          mapRef.current = new mapboxgl.Map({
+            container: mapContainerRef.current,
+            style: 'mapbox://styles/mapbox/streets-v12',
+            center: startCenter,
+            zoom: startZoom,
+          })
+
+          setupMapControls()
+        }
+        setIsGettingLocation(false)
+      }
     }
 
     function setupMapControls() {
@@ -139,14 +150,12 @@ function FindRide() {
 
       // Add geolocate control to track user's location
       const geolocateControl = new mapboxgl.GeolocateControl({
-        positionOptions: {
-          enableHighAccuracy: true
-        },
+        positionOptions: { enableHighAccuracy: true },
         trackUserLocation: true,
         showUserHeading: true,
-        showAccuracyCircle: true
+        showAccuracyCircle: true,
       })
-      
+
       mapRef.current.addControl(geolocateControl, 'top-right')
 
       // Listen for geolocation events from the control
@@ -164,7 +173,10 @@ function FindRide() {
       })
     }
 
+    initMap()
+
     return () => {
+      destroyed = true
       if (mapRef.current) {
         mapRef.current.remove()
       }
@@ -381,9 +393,12 @@ function FindRide() {
                 </p>
               )}
               {userLocation && !locationError && (
-                <p className="text-sm text-green-600 bg-green-50 px-3 py-1 rounded-lg">
-                  📍 Location detected - showing rides near you
-                </p>
+                <div className="text-sm text-green-600 bg-green-50 px-3 py-2 rounded-lg">
+                  <p className="font-medium">📍 Your Location:</p>
+                  <p className="text-xs mt-1 text-gray-600">
+                    Latitude: {userLocation[0].toFixed(6)}° | Longitude: {userLocation[1].toFixed(6)}°
+                  </p>
+                </div>
               )}
             </div>
             <button
