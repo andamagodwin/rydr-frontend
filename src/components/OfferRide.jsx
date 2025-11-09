@@ -60,6 +60,7 @@ function OfferRide() {
   const [showFromDropdown, setShowFromDropdown] = useState(false)
   const [showToDropdown, setShowToDropdown] = useState(false)
   const [sessionToken] = useState(generateSessionToken())
+  const [validationError, setValidationError] = useState('')
 
   const mapContainerRef = useRef()
   const mapRef = useRef()
@@ -326,14 +327,42 @@ function OfferRide() {
       ...prev,
       [name]: value
     }))
+    
+    // Clear validation error if user starts filling required fields
+    if (validationError && (name === 'driverName' || name === 'vehicleType' || name === 'registrationNumber')) {
+      setValidationError('')
+    }
   }
 
   // Step navigation
   const handleNext = () => {
+    // Clear any existing validation errors
+    setValidationError('')
+    
     // Validate Step 1 required fields
     if (currentStep === 1) {
-      if (!formData.driverName || !formData.vehicleType || !formData.registrationNumber) {
-        alert('Please fill in Driver Name, Vehicle Type, and Registration Number')
+      const missingFields = []
+      if (!formData.driverName) missingFields.push('Driver Name')
+      if (!formData.vehicleType) missingFields.push('Vehicle Type')
+      if (!formData.registrationNumber) missingFields.push('Registration Number')
+      
+      if (missingFields.length > 0) {
+        const fieldText = missingFields.length === 1 
+          ? missingFields[0] 
+          : missingFields.length === 2
+          ? `${missingFields[0]} and ${missingFields[1]}`
+          : `${missingFields.slice(0, -1).join(', ')}, and ${missingFields[missingFields.length - 1]}`
+        
+        setValidationError(`Please fill in ${fieldText} to continue.`)
+        
+        // Scroll to the error message after a brief delay to ensure it's rendered
+        setTimeout(() => {
+          window.scrollTo({
+            top: 0,
+            behavior: 'smooth'
+          })
+        }, 100)
+        
         return
       }
     }
@@ -555,6 +584,21 @@ function OfferRide() {
           <h1 className="text-3xl sm:text-4xl font-bold text-primary mb-2">Offer a Ride</h1>
           <p className="text-gray-600">Share your journey and earn rewards while helping others</p>
         </div>
+
+        {/* Validation Error Message */}
+        {validationError && (
+          <div className="mb-8 bg-red-50 border-l-4 border-red-500 p-4 rounded-r-lg shadow-sm animate-fadeIn">
+            <div className="flex items-start">
+              <AlertCircle className="text-red-600 mr-3 mt-0.5 flex-shrink-0" size={20} />
+              <div>
+                <p className="text-red-800 font-semibold">Required Fields Missing</p>
+                <p className="text-red-700 text-sm mt-1">
+                  {validationError}
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Wallet Connection Warning */}
         {!isConnected && (
