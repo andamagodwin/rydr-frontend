@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { web3Accounts, web3Enable } from '@polkadot/extension-dapp'
 import { WalletContext } from '../context/walletContext'
+import useWalletStore from '../store/walletStore'
 
 export function WalletProvider({ children }) {
   const [accounts, setAccounts] = useState([])
@@ -8,10 +9,26 @@ export function WalletProvider({ children }) {
   const [isConnecting, setIsConnecting] = useState(false)
   const [error, setError] = useState(null)
 
+  const {
+    setIsConnected,
+    setSelectedAccount: setStoreAccount,
+    setAccounts: setStoreAccounts,
+    disconnect: storeDisconnect
+  } = useWalletStore()
+
   // Check for existing connection on mount
   useEffect(() => {
     checkConnection()
   }, [])
+
+  useEffect(() => {
+    setStoreAccounts(accounts)
+  }, [accounts, setStoreAccounts])
+
+  useEffect(() => {
+    setStoreAccount(selectedAccount)
+    setIsConnected(!!selectedAccount)
+  }, [selectedAccount, setStoreAccount, setIsConnected])
 
   const checkConnection = async () => {
     try {
@@ -76,6 +93,7 @@ export function WalletProvider({ children }) {
     setSelectedAccount(null)
     setAccounts([])
     localStorage.removeItem('selectedAccount')
+    storeDisconnect()
   }
 
   const selectAccount = (account) => {

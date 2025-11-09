@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react'
 import { web3Accounts, web3Enable } from '@polkadot/extension-dapp'
 import authService from '../services/authService'
 import { WalletContext } from '../context/walletContext'
+import useWalletStore from '../store/walletStore'
 
 export function WalletProvider({ children }) {
   const [accounts, setAccounts] = useState([])
@@ -30,12 +31,21 @@ export function WalletProvider({ children }) {
         throw new Error('No accounts found in your wallet. Please create an account first.')
       }
 
-      setAccounts(allAccounts)
+  setAccounts(allAccounts)
+  // Update Zustand store with accounts
+  console.log('WalletProvider - Updating store accounts', allAccounts.length)
+  useWalletStore.getState().setAccounts(allAccounts)
       
       // Auto-select first account if none selected
       if (!selectedAccount && allAccounts.length > 0) {
         const account = allAccounts[0]
         setSelectedAccount(account)
+        
+  // Update Zustand store
+  console.log('WalletProvider - Setting store for new account', account.address)
+  useWalletStore.getState().setSelectedAccount(account)
+  useWalletStore.getState().setIsConnected(true)
+        console.log('WalletProvider - Setting isConnected to true for new connection')
         
         // Create Appwrite session with wallet
         await createAppwriteSession(account)
@@ -43,6 +53,12 @@ export function WalletProvider({ children }) {
         // Restore selected account session
         const account = allAccounts.find(acc => acc.address === selectedAccount.address)
         if (account) {
+          // Update Zustand store
+          console.log('WalletProvider - Setting store for existing account', account.address)
+          useWalletStore.getState().setSelectedAccount(account)
+          useWalletStore.getState().setIsConnected(true)
+          console.log('WalletProvider - Setting isConnected to true for existing account')
+          
           await createAppwriteSession(account)
         }
       }
@@ -94,6 +110,10 @@ export function WalletProvider({ children }) {
 
   const selectAccount = async (account) => {
     setSelectedAccount(account)
+    
+    // Update Zustand store
+    useWalletStore.getState().setSelectedAccount(account)
+    
     await createAppwriteSession(account)
   }
 
@@ -111,6 +131,10 @@ export function WalletProvider({ children }) {
       setAppwriteSession(null)
       setAppwriteUser(null)
       setError(null)
+      
+      // Update Zustand store
+      const { disconnect } = useWalletStore.getState()
+      disconnect()
     }
   }
 

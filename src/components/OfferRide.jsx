@@ -1,7 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react'
 import mapboxgl from 'mapbox-gl'
 import 'mapbox-gl/dist/mapbox-gl.css'
-import { Check } from 'lucide-react'
+import { Check, AlertCircle } from 'lucide-react'
+import useWalletStore from '../store/walletStore'
 
 // Mapbox access token
 mapboxgl.accessToken = 'pk.eyJ1IjoiYW5kYW1hZXpyYSIsImEiOiJjbWM3djMyamcwMmxuMmxzYTFsMThpNTJwIn0.9H7kNoaCYW0Kiw0wzrLfhQ'
@@ -22,6 +23,12 @@ const generateSessionToken = () => {
 }
 
 function OfferRide() {
+  // Get wallet connection status from Zustand store
+  const { isConnected } = useWalletStore()
+  
+  // Debug log
+  console.log('OfferRide - isConnected:', isConnected)
+  
   const [formData, setFormData] = useState({
     // Driver Info
     driverName: '',
@@ -548,6 +555,21 @@ function OfferRide() {
           <h1 className="text-3xl sm:text-4xl font-bold text-primary mb-2">Offer a Ride</h1>
           <p className="text-gray-600">Share your journey and earn rewards while helping others</p>
         </div>
+
+        {/* Wallet Connection Warning */}
+        {!isConnected && (
+          <div className="mb-8 bg-amber-50 border-l-4 border-amber-500 p-4 rounded-r-lg shadow-sm animate-fadeIn">
+            <div className="flex items-start">
+              <AlertCircle className="text-amber-600 mr-3 mt-0.5 flex-shrink-0" size={20} />
+              <div>
+                <p className="text-amber-800 font-semibold">Wallet Not Connected</p>
+                <p className="text-amber-700 text-sm mt-1">
+                  Please connect your Polkadot wallet to continue offering rides.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Enhanced Stepper */}
         <div className="mb-12">
