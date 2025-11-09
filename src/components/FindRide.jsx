@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import mapboxgl from 'mapbox-gl'
 import 'mapbox-gl/dist/mapbox-gl.css'
+import rideService from '../services/rideService'
 
 // Mapbox access token
 mapboxgl.accessToken = 'pk.eyJ1IjoiYW5kYW1hZXpyYSIsImEiOiJjbWM3djMyamcwMmxuMmxzYTFsMThpNTJwIn0.9H7kNoaCYW0Kiw0wzrLfhQ'
@@ -16,66 +17,80 @@ function FindRide() {
   const [locationError, setLocationError] = useState(null)
   const [destinationLocation, setDestinationLocation] = useState(null)
   const [isGettingLocation, setIsGettingLocation] = useState(false)
+  const [availableRides, setAvailableRides] = useState([])
+  const [isLoadingRides, setIsLoadingRides] = useState(false)
+  const [ridesError, setRidesError] = useState(null)
   
   const mapContainerRef = useRef()
   const mapRef = useRef()
   const markersRef = useRef([])
 
-  // Mock data for available rides with Uganda coordinates (Kampala area)
-  const availableRides = [
-    {
-      id: 1,
-      from: 'City Center',
-      to: 'Entebbe Airport',
-      driverName: 'John Doe',
-      rating: 4.8,
-      price: 25000, // UGX
-      coordinates: {
-        from: [32.582520, 0.347596], // Kampala city center [lng, lat]
-        to: [32.443606, 0.042068]   // Entebbe Airport
-      },
-      color: '#E6007A' // Primary color
-    },
-    {
-      id: 2,
-      from: 'Makerere University',
-      to: 'Garden City Mall',
-      driverName: 'Sarah Nakato',
-      rating: 4.9,
-      price: 8000, // UGX
-      coordinates: {
-        from: [32.566910, 0.335110], // Makerere University
-        to: [32.616940, 0.337250]   // Garden City Mall
-      },
-      color: '#10B981' // Green
-    },
-    {
-      id: 3,
-      from: 'Kampala',
-      to: 'Mukono',
-      driverName: 'Peter Ssali',
-      rating: 4.7,
-      price: 15000, // UGX
-      coordinates: {
-        from: [32.582520, 0.347596], // Kampala
-        to: [32.755060, 0.353430]   // Mukono
-      },
-      color: '#3B82F6' // Blue
-    },
-    {
-      id: 4,
-      from: 'Ntinda',
-      to: 'City Center',
-      driverName: 'Grace Namuli',
-      rating: 5.0,
-      price: 7000, // UGX
-      coordinates: {
-        from: [32.615540, 0.364190], // Ntinda
-        to: [32.582520, 0.347596]   // City Center
-      },
-      color: '#F59E0B' // Amber
+  // Fetch rides from database
+  const fetchRides = async () => {
+    setIsLoadingRides(true)
+    setRidesError(null)
+    try {
+      const rides = await rideService.getActiveRides()
+      // Transform database rides to match expected format
+      const transformedRides = rides.map(ride => {
+        let fromCoords = [32.582520, 0.347596] // Default Kampala coordinates
+        let toCoords = [32.443606, 0.042068]   // Default Entebbe coordinates
+        
+        try {
+          if (ride.pickupCoordinates) {
+            const parsed = JSON.parse(ride.pickupCoordinates)
+            if (Array.isArray(parsed) && parsed.length === 2 && !isNaN(parsed[0]) && !isNaN(parsed[1])) {
+              fromCoords = parsed
+            }
+          }
+        } catch (err) {
+          console.warn('Invalid pickup coordinates:', ride.pickupCoordinates, err)
+        }
+        
+        try {
+          if (ride.dropoffCoordinates) {
+            const parsed = JSON.parse(ride.dropoffCoordinates)
+            if (Array.isArray(parsed) && parsed.length === 2 && !isNaN(parsed[0]) && !isNaN(parsed[1])) {
+              toCoords = parsed
+            }
+          }
+        } catch (err) {
+          console.warn('Invalid dropoff coordinates:', ride.dropoffCoordinates, err)
+        }
+
+        return {
+          id: ride.$id,
+          from: ride.from,
+          to: ride.to,
+          driverName: ride.driverName,
+          rating: 4.5, // Default rating - you may want to add this to database later
+          price: parseInt(ride.price) || 0,
+          coordinates: {
+            from: fromCoords,
+            to: toCoords
+          },
+          color: '#E6007A', // Default color
+          vehicleType: ride.vehicleType,
+          seats: ride.seats,
+          date: ride.date,
+          time: ride.time,
+          description: ride.description
+        }
+      })
+      setAvailableRides(transformedRides)
+    } catch (error) {
+      console.error('Failed to fetch rides:', error)
+      setRidesError('Failed to load rides. Please try again.')
+      setAvailableRides([])
+    } finally {
+      setIsLoadingRides(false)
     }
-  ]
+  }
+
+  // Load rides on component mount
+  useEffect(() => {
+    fetchRides()
+  }, [])
 
   const filteredRides = availableRides
 
@@ -259,8 +274,76 @@ function FindRide() {
     })
   }, [filteredRides, userLocation, destinationLocation, toLocation])
 
-  const handleSearch = () => {
-    console.log('Searching rides from', fromLocation, 'to', toLocation)
+  const handleSearch = async () => {
+    if (!fromLocation && !toLocation) {
+      fetchRides() // Reload all rides if no search criteria
+      return
+    }
+
+    setIsLoadingRides(true)
+    setRidesError(null)
+    try {
+      let rides
+      if (fromLocation || toLocation) {
+        rides = await rideService.searchRides(fromLocation, toLocation)
+      } else {
+        rides = await rideService.getActiveRides()
+      }
+      
+      // Transform database rides to match expected format
+      const transformedRides = rides.map(ride => {
+        let fromCoords = [32.582520, 0.347596] // Default Kampala coordinates
+        let toCoords = [32.443606, 0.042068]   // Default Entebbe coordinates
+        
+        try {
+          if (ride.pickupCoordinates) {
+            const parsed = JSON.parse(ride.pickupCoordinates)
+            if (Array.isArray(parsed) && parsed.length === 2 && !isNaN(parsed[0]) && !isNaN(parsed[1])) {
+              fromCoords = parsed
+            }
+          }
+        } catch (err) {
+          console.warn('Invalid pickup coordinates:', ride.pickupCoordinates, err)
+        }
+        
+        try {
+          if (ride.dropoffCoordinates) {
+            const parsed = JSON.parse(ride.dropoffCoordinates)
+            if (Array.isArray(parsed) && parsed.length === 2 && !isNaN(parsed[0]) && !isNaN(parsed[1])) {
+              toCoords = parsed
+            }
+          }
+        } catch (err) {
+          console.warn('Invalid dropoff coordinates:', ride.dropoffCoordinates, err)
+        }
+
+        return {
+          id: ride.$id,
+          from: ride.from,
+          to: ride.to,
+          driverName: ride.driverName,
+          rating: 4.5, // Default rating - you may want to add this to database later
+          price: parseInt(ride.price) || 0,
+          coordinates: {
+            from: fromCoords,
+            to: toCoords
+          },
+          color: '#E6007A', // Default color
+          vehicleType: ride.vehicleType,
+          seats: ride.seats,
+          date: ride.date,
+          time: ride.time,
+          description: ride.description
+        }
+      })
+      setAvailableRides(transformedRides)
+    } catch (error) {
+      console.error('Failed to search rides:', error)
+      setRidesError('Failed to search rides. Please try again.')
+      setAvailableRides([])
+    } finally {
+      setIsLoadingRides(false)
+    }
   }
 
   const handleRequestRide = (rideId) => {
@@ -429,8 +512,8 @@ function FindRide() {
         </div>
 
         {/* Search Section */}
-        <div className="bg-white rounded-lg shadow-md p-6 mb-8">
-          <div className="flex flex-col md:flex-row gap-4 items-end">
+        <div className="bg-white rounded-lg shadow-md p-4 md:p-6 mb-8">
+          <div className="flex flex-col md:flex-row gap-4 md:items-end">
             <div className="flex-1">
               <label htmlFor="from" className="block text-sm font-medium text-gray-700 mb-2">
                 From
@@ -485,7 +568,7 @@ function FindRide() {
             </div>
             <button
               onClick={handleSearch}
-              className="bg-primary text-white px-8 py-3 rounded-lg font-semibold hover:bg-opacity-90 transition-colors whitespace-nowrap"
+              className="bg-primary text-white px-8 py-3 rounded-lg font-semibold hover:bg-opacity-90 transition-colors whitespace-nowrap w-full md:w-auto"
             >
               Search
             </button>
@@ -498,60 +581,135 @@ function FindRide() {
             <h2 className="text-2xl font-bold text-gray-800">
               Available Rides
             </h2>
+            {isLoadingRides && (
+              <div className="flex items-center space-x-2 text-primary">
+                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-primary"></div>
+                <span className="text-sm">Loading rides...</span>
+              </div>
+            )}
           </div>
+
+          {ridesError && (
+            <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
+              <div className="flex items-center space-x-2 text-red-700">
+                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                </svg>
+                <span className="text-sm font-medium">{ridesError}</span>
+              </div>
+              <button
+                onClick={fetchRides}
+                className="mt-2 text-sm text-red-600 hover:text-red-800 underline"
+              >
+                Try again
+              </button>
+            </div>
+          )}
           
           <div className="space-y-4">
-            {filteredRides.map((ride) => (
+            {!isLoadingRides && filteredRides.map((ride) => (
               <div 
                 key={ride.id} 
-                className="border border-gray-200 rounded-lg p-4 transition-all hover:shadow-md"
+                className="border border-gray-200 rounded-lg p-3 md:p-4 transition-all hover:shadow-md"
               >
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-center">
-                  {/* Column 1: From/To */}
-                  <div className="space-y-1">
-                    <div className="flex items-center space-x-2">
-                      <span className="text-gray-600 text-sm">From:</span>
+                {/* Mobile Layout */}
+                <div className="block md:hidden">
+                  {/* Header: Route */}
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center space-x-2 text-sm">
+                      <span className="text-gray-500">📍</span>
                       <span className="font-medium">{ride.from}</span>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <span className="text-gray-600 text-sm">To:</span>
+                      <span className="text-gray-400">→</span>
                       <span className="font-medium">{ride.to}</span>
                     </div>
-                  </div>
-
-                  {/* Column 2: Driver Name and Rating */}
-                  <div className="text-center md:text-left">
-                    <div className="font-semibold text-gray-800 mb-1">{ride.driverName}</div>
-                    <div className="flex items-center justify-center md:justify-start space-x-1">
-                      {renderStars(ride.rating)}
-                      <span className="text-sm text-gray-600 ml-1">({ride.rating})</span>
+                    <div className="text-primary font-bold text-lg">
+                      {formatPrice(ride.price)}
                     </div>
                   </div>
 
-                  {/* Column 3: Price and Request Button */}
-                  <div className="text-center md:text-right">
-                    <div className="text-primary font-bold text-lg mb-2">
-                      {formatPrice(ride.price)}
+                  {/* Driver Info & Action Row */}
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-3">
+                      <div className="w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center">
+                        <span className="text-xs font-medium text-gray-600">
+                          {ride.driverName.charAt(0)}
+                        </span>
+                      </div>
+                      <div>
+                        <div className="font-medium text-sm">{ride.driverName}</div>
+                        <div className="flex items-center space-x-1">
+                          {renderStars(ride.rating)}
+                          <span className="text-xs text-gray-500">({ride.rating})</span>
+                        </div>
+                      </div>
                     </div>
                     <button
                       onClick={(e) => {
                         e.stopPropagation()
                         handleRequestRide(ride.id)
                       }}
-                      className="bg-primary text-white px-6 py-2 rounded-lg font-medium hover:bg-opacity-90 transition-colors"
+                      className="bg-primary text-white px-4 py-2 rounded-lg font-medium hover:bg-opacity-90 transition-colors text-sm"
                     >
-                      Request Ride
+                      Request
                     </button>
+                  </div>
+                </div>
+
+                {/* Desktop Layout */}
+                <div className="hidden md:block">
+                  <div className="grid grid-cols-3 gap-4 items-center">
+                    {/* Column 1: From/To */}
+                    <div className="space-y-1">
+                      <div className="flex items-center space-x-2">
+                        <span className="text-gray-600 text-sm">From:</span>
+                        <span className="font-medium">{ride.from}</span>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <span className="text-gray-600 text-sm">To:</span>
+                        <span className="font-medium">{ride.to}</span>
+                      </div>
+                    </div>
+
+                    {/* Column 2: Driver Name and Rating */}
+                    <div className="text-left">
+                      <div className="font-semibold text-gray-800 mb-1">{ride.driverName}</div>
+                      <div className="flex items-center space-x-1">
+                        {renderStars(ride.rating)}
+                        <span className="text-sm text-gray-600 ml-1">({ride.rating})</span>
+                      </div>
+                    </div>
+
+                    {/* Column 3: Price and Request Button */}
+                    <div className="text-right">
+                      <div className="text-primary font-bold text-lg mb-2">
+                        {formatPrice(ride.price)}
+                      </div>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          handleRequestRide(ride.id)
+                        }}
+                        className="bg-primary text-white px-6 py-2 rounded-lg font-medium hover:bg-opacity-90 transition-colors"
+                      >
+                        Request Ride
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
             ))}
           </div>
 
-          {filteredRides.length === 0 && (
+          {!isLoadingRides && filteredRides.length === 0 && !ridesError && (
             <div className="text-center py-12">
               <p className="text-gray-500 text-lg">No rides available at the moment.</p>
-              <p className="text-gray-400 text-sm mt-2">Try adjusting your search criteria.</p>
+              <p className="text-gray-400 text-sm mt-2">Try adjusting your search criteria or refresh the page.</p>
+              <button
+                onClick={fetchRides}
+                className="mt-4 bg-primary text-white px-6 py-2 rounded-lg font-medium hover:bg-opacity-90 transition-colors"
+              >
+                Refresh Rides
+              </button>
             </div>
           )}
 
