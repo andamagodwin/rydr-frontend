@@ -5,6 +5,7 @@ import Navbar from './components/Navbar'
 import Footer from './components/Footer'
 import Welcome from './components/Welcome'
 import FindRide from './components/FindRide'
+import Payment from './components/Payment'
 import OfferRide from './components/OfferRide'
 import ConnectWallet from './components/ConnectWallet'
 import './App.css'
@@ -20,6 +21,7 @@ function App() {
               <Route path="/" element={<Welcome />} />
               <Route path="/home" element={<Welcome />} />
               <Route path="/find-ride" element={<FindRide />} />
+              <Route path="/payment" element={<Payment />} />
               <Route path="/offer-ride" element={<OfferRide />} />
               <Route path="/connect-wallet" element={<ConnectWallet />} />
             </Routes>

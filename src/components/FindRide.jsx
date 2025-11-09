@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import mapboxgl from 'mapbox-gl'
 import 'mapbox-gl/dist/mapbox-gl.css'
 
@@ -6,11 +7,11 @@ import 'mapbox-gl/dist/mapbox-gl.css'
 mapboxgl.accessToken = 'pk.eyJ1IjoiYW5kYW1hZXpyYSIsImEiOiJjbWM3djMyamcwMmxuMmxzYTFsMThpNTJwIn0.9H7kNoaCYW0Kiw0wzrLfhQ'
 
 function FindRide() {
+  const navigate = useNavigate()
   const [fromLocation, setFromLocation] = useState('')
   const [toLocation, setToLocation] = useState('')
   const [isMapExpanded, setIsMapExpanded] = useState(false)
-  const [selectedRouteId, setSelectedRouteId] = useState(null)
-  const [hoveredRideId, setHoveredRideId] = useState(null)
+
   const [userLocation, setUserLocation] = useState(null)
   const [locationError, setLocationError] = useState(null)
   const [destinationLocation, setDestinationLocation] = useState(null)
@@ -76,9 +77,7 @@ function FindRide() {
     }
   ]
 
-  const filteredRides = selectedRouteId 
-    ? availableRides.filter(ride => ride.id === selectedRouteId)
-    : availableRides
+  const filteredRides = availableRides
 
   // Initialize map - default to user's current location when available
   useEffect(() => {
@@ -230,7 +229,7 @@ function FindRide() {
       const pickupEl = document.createElement('div')
       pickupEl.style.width = '12px'
       pickupEl.style.height = '12px'
-      pickupEl.style.background = selectedRouteId === ride.id ? '#E6007A' : '#10B981'
+      pickupEl.style.background = '#10B981'
       pickupEl.style.border = '2px solid white'
       pickupEl.style.borderRadius = '50%'
       pickupEl.style.boxShadow = '0 2px 4px rgba(0,0,0,0.3)'
@@ -246,7 +245,7 @@ function FindRide() {
       const dropoffEl = document.createElement('div')
       dropoffEl.style.width = '12px'
       dropoffEl.style.height = '12px'
-      dropoffEl.style.background = selectedRouteId === ride.id ? '#E6007A' : '#EF4444'
+      dropoffEl.style.background = '#EF4444'
       dropoffEl.style.border = '2px solid white'
       dropoffEl.style.borderRadius = '50%'
       dropoffEl.style.boxShadow = '0 2px 4px rgba(0,0,0,0.3)'
@@ -258,14 +257,16 @@ function FindRide() {
       
       markersRef.current.push(dropoffMarker)
     })
-  }, [filteredRides, userLocation, destinationLocation, selectedRouteId, hoveredRideId, toLocation])
+  }, [filteredRides, userLocation, destinationLocation, toLocation])
 
   const handleSearch = () => {
     console.log('Searching rides from', fromLocation, 'to', toLocation)
   }
 
   const handleRequestRide = (rideId) => {
-    console.log('Requesting ride with ID:', rideId)
+    const ride = availableRides.find(r => r.id === rideId)
+    if (!ride) return
+    navigate('/payment', { state: { ride } })
   }
 
   const toggleMapExpansion = () => {
@@ -277,13 +278,9 @@ function FindRide() {
     }, 300)
   }
 
-  const handleRouteClick = (rideId) => {
-    setSelectedRouteId(selectedRouteId === rideId ? null : rideId)
-  }
 
-  const handleRideHover = (rideId, isEntering) => {
-    setHoveredRideId(isEntering ? rideId : null)
-  }
+
+
 
   const handleFromInputClick = () => {
     if (userLocation) {
@@ -427,18 +424,7 @@ function FindRide() {
               className="h-full w-full"
             />
             
-            {/* Route Counter */}
-            {selectedRouteId && (
-              <div className="absolute top-4 right-4 bg-primary text-white rounded-lg px-3 py-1 text-sm font-medium z-10">
-                Showing route {selectedRouteId}
-                <button 
-                  onClick={() => setSelectedRouteId(null)}
-                  className="ml-2 hover:text-gray-200"
-                >
-                  ✕
-                </button>
-              </div>
-            )}
+            {/* Route Counter - removed since we don't filter routes anymore */}
           </div>
         </div>
 
@@ -518,16 +504,7 @@ function FindRide() {
             {filteredRides.map((ride) => (
               <div 
                 key={ride.id} 
-                className={`border rounded-lg p-4 transition-all cursor-pointer ${
-                  selectedRouteId === ride.id 
-                    ? 'border-primary bg-primary bg-opacity-5 shadow-md' 
-                    : hoveredRideId === ride.id
-                    ? 'border-gray-300 shadow-md'
-                    : 'border-gray-200 hover:shadow-md'
-                }`}
-                onMouseEnter={() => handleRideHover(ride.id, true)}
-                onMouseLeave={() => handleRideHover(ride.id, false)}
-                onClick={() => handleRouteClick(ride.id)}
+                className="border border-gray-200 rounded-lg p-4 transition-all hover:shadow-md"
               >
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-center">
                   {/* Column 1: From/To */}
@@ -586,7 +563,7 @@ function FindRide() {
                   <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
                 </svg>
                 <span className="text-sm font-medium">
-                  Tip: Click on ride cards to highlight them on the map!
+                  Tip: All available rides are shown on the map!
                 </span>
               </div>
             </div>
