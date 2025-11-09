@@ -1014,30 +1014,46 @@ function OfferRide() {
             </form>
           </div>
 
-          {/* Right Column - Map (only show visually on Step 2) */}
-          <div className={`${currentStep === 2 ? 'block' : 'hidden'} bg-white rounded-lg shadow-md overflow-hidden`}>
-            <div className="p-6 border-b border-gray-200">
-              <h2 className="text-2xl font-bold text-gray-800 mb-2">Select Route on Map</h2>
-              <div className="space-y-2">
-                <div className="flex items-center space-x-2 text-sm">
-                  <div className="w-4 h-4 bg-green-500 rounded-full border-2 border-white shadow"></div>
-                  <span className="text-gray-600">Click to set pickup location</span>
+          {/* Right Column - Illustration for Step 1, Map for Step 2 */}
+          <div>
+            {/* Step 1: Driver Illustration */}
+            {currentStep === 1 && (
+              <div className="flex items-start justify-center h-full pt-12 px-6">
+                <img 
+                  src="/City driver-pana.svg" 
+                  alt="City driver illustration" 
+                  className="w-full max-w-lg h-auto"
+                />
+              </div>
+            )}
+
+            {/* Step 2: Map */}
+            {currentStep === 2 && (
+              <div className="bg-white rounded-lg shadow-md overflow-hidden">
+                <div className="p-6 border-b border-gray-200">
+                  <h2 className="text-2xl font-bold text-gray-800 mb-2">Select Route on Map</h2>
+                  <div className="space-y-2">
+                    <div className="flex items-center space-x-2 text-sm">
+                      <div className="w-4 h-4 bg-green-500 rounded-full border-2 border-white shadow"></div>
+                      <span className="text-gray-600">Click to set pickup location</span>
+                    </div>
+                    <div className="flex items-center space-x-2 text-sm">
+                      <div className="w-4 h-4 bg-red-500 rounded-full border-2 border-white shadow"></div>
+                      <span className="text-gray-600">Click to set dropoff location</span>
+                    </div>
+                  </div>
+                  {locationError && (
+                    <p className="text-sm text-amber-600 bg-amber-50 px-3 py-2 rounded-lg mt-3">
+                      ℹ️ {locationError}
+                    </p>
+                  )}
                 </div>
-                <div className="flex items-center space-x-2 text-sm">
-                  <div className="w-4 h-4 bg-red-500 rounded-full border-2 border-white shadow"></div>
-                  <span className="text-gray-600">Click to set dropoff location</span>
+                
+                <div className="h-[600px] relative">
+                  <div ref={mapContainerRef} className="h-full w-full" />
                 </div>
               </div>
-              {locationError && (
-                <p className="text-sm text-amber-600 bg-amber-50 px-3 py-2 rounded-lg mt-3">
-                  ℹ️ {locationError}
-                </p>
-              )}
-            </div>
-            
-            <div className="h-[600px] relative">
-              <div ref={mapContainerRef} className="h-full w-full" />
-            </div>
+            )}
           </div>
         </div>
 
