@@ -11,6 +11,7 @@ export function WalletProvider({ children }) {
   const [error, setError] = useState(null)
   const [appwriteSession, setAppwriteSession] = useState(null)
   const [appwriteUser, setAppwriteUser] = useState(null)
+  const [hasCheckedSession, setHasCheckedSession] = useState(false)
 
   const setStoreAccounts = useWalletStore((state) => state.setAccounts)
   const setStoreAccount = useWalletStore((state) => state.setSelectedAccount)
@@ -57,9 +58,9 @@ export function WalletProvider({ children }) {
       setStoreAccounts(allAccounts)
 
       const savedAddress = localStorage.getItem('selectedAccount')
-      let activeAccount = selectedAccount
+      let activeAccount = null
 
-      if (!activeAccount && savedAddress) {
+      if (savedAddress) {
         activeAccount = allAccounts.find((acc) => acc.address === savedAddress) || null
       }
 
@@ -83,7 +84,7 @@ export function WalletProvider({ children }) {
     } finally {
       if (!isSilent) setIsConnecting(false)
     }
-  }, [selectedAccount, createAppwriteSession, setIsConnected, setStoreAccount, setStoreAccounts])
+  }, [createAppwriteSession, setIsConnected, setStoreAccount, setStoreAccounts])
 
   const checkExistingSession = useCallback(async () => {
     try {
@@ -94,12 +95,16 @@ export function WalletProvider({ children }) {
       }
     } catch {
       console.log('No existing Appwrite session found')
+    } finally {
+      setHasCheckedSession(true)
     }
   }, [connectWallet])
 
   useEffect(() => {
-    checkExistingSession()
-  }, [checkExistingSession])
+    if (!hasCheckedSession) {
+      checkExistingSession()
+    }
+  }, [hasCheckedSession, checkExistingSession])
 
   const selectAccount = useCallback(async (account) => {
     setSelectedAccount(account)

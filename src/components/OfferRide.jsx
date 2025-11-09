@@ -1,8 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react'
 import mapboxgl from 'mapbox-gl'
 import 'mapbox-gl/dist/mapbox-gl.css'
-import { Check, AlertCircle } from 'lucide-react'
+import { Check, AlertCircle, CheckCircle, X } from 'lucide-react'
 import useWalletStore from '../store/walletStore'
+import rideService from '../services/rideService'
 
 // Mapbox access token
 mapboxgl.accessToken = 'pk.eyJ1IjoiYW5kYW1hZXpyYSIsImEiOiJjbWM3djMyamcwMmxuMmxzYTFsMThpNTJwIn0.9H7kNoaCYW0Kiw0wzrLfhQ'
@@ -23,11 +24,9 @@ const generateSessionToken = () => {
 }
 
 function OfferRide() {
-  // Get wallet connection status from Zustand store
-  const { isConnected } = useWalletStore()
-  
-  // Debug log
-  console.log('OfferRide - isConnected:', isConnected)
+  // Get wallet connection status and account from Zustand store
+  const isConnected = useWalletStore((state) => state.isConnected)
+  const selectedAccount = useWalletStore((state) => state.selectedAccount)
   
   const [formData, setFormData] = useState({
     // Driver Info
@@ -53,6 +52,7 @@ function OfferRide() {
   const [locationError, setLocationError] = useState(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [currentStep, setCurrentStep] = useState(1)
+  const [showSuccessModal, setShowSuccessModal] = useState(false)
   
   // Autocomplete state
   const [fromSuggestions, setFromSuggestions] = useState([])
@@ -408,43 +408,80 @@ function OfferRide() {
       return
     }
 
-    setIsSubmitting(true)
-
-    // Prepare ride data
-    const rideData = {
-      ...formData,
-      pickupCoordinates: pickupLocation,
-      dropoffCoordinates: dropoffLocation,
-      createdAt: new Date().toISOString()
+    if (!selectedAccount) {
+      alert('Please connect your wallet to post a ride')
+      return
     }
 
-    console.log('Submitting ride offer:', rideData)
+    setIsSubmitting(true)
 
-    // Simulate API call
-    setTimeout(() => {
-      setIsSubmitting(false)
-      alert('Ride posted successfully! 🎉')
+    try {
+      // Prepare ride data for Appwrite - matching exact schema
+      const rideData = {
+        driverWallet: selectedAccount.address,
+        driverName: formData.driverName,
+        driverPhone: formData.driverPhone || '',
+        vehicleType: formData.vehicleType,
+        vehicleMake: formData.vehicleMake || '',
+        vehicleModel: formData.vehicleModel || '',
+        vehicleColor: formData.vehicleColor || '',
+        registrationNumber: formData.registrationNumber,
+        from: formData.from,
+        to: formData.to,
+        date: formData.date,
+        time: formData.time,
+        seats: formData.seats,
+        price: formData.price,
+        description: formData.description || '',
+        // pickupLocation is [lng, lat] array from Mapbox
+        pickupCoordinates: JSON.stringify({ 
+          lng: pickupLocation[0], 
+          lat: pickupLocation[1] 
+        }),
+        // dropoffLocation is [lng, lat] array from Mapbox
+        dropoffCoordinates: JSON.stringify({ 
+          lng: dropoffLocation[0], 
+          lat: dropoffLocation[1] 
+        }),
+        status: 'active'
+      }
+
+      console.log('Submitting ride to Appwrite:', rideData)
+
+      // Submit to Appwrite
+      await rideService.createRide(rideData)
       
-      // Reset form
-      setFormData({
-        driverName: '',
-        driverPhone: '',
-        vehicleType: '',
-        vehicleMake: '',
-        vehicleModel: '',
-        vehicleColor: '',
-        registrationNumber: '',
-        from: '',
-        to: '',
-        date: '',
-        time: '',
-        seats: '1',
-        price: '',
-        description: ''
-      })
-      resetLocations()
-      setCurrentStep(1)
-    }, 1500)
+      // Show success modal
+      setShowSuccessModal(true)
+      
+      // Reset form after short delay
+      setTimeout(() => {
+        setFormData({
+          driverName: '',
+          driverPhone: '',
+          vehicleType: '',
+          vehicleMake: '',
+          vehicleModel: '',
+          vehicleColor: '',
+          registrationNumber: '',
+          from: '',
+          to: '',
+          date: '',
+          time: '',
+          seats: '1',
+          price: '',
+          description: ''
+        })
+        resetLocations()
+        setCurrentStep(1)
+      }, 2000)
+      
+    } catch (error) {
+      console.error('Error posting ride:', error)
+      alert('Failed to post ride. Please try again.')
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   // Draw or update route between pickup and dropoff using Mapbox Directions API
@@ -1120,6 +1157,72 @@ function OfferRide() {
           </div>
         </div>
       </div>
+
+      {/* Success Modal */}
+      {showSuccessModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 animate-fadeIn">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-8 relative animate-in">
+            {/* Close button */}
+            <button
+              onClick={() => setShowSuccessModal(false)}
+              className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition-colors"
+            >
+              <X size={24} />
+            </button>
+
+            {/* Success Icon */}
+            <div className="flex justify-center mb-6">
+              <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center">
+                <CheckCircle className="text-green-600" size={48} />
+              </div>
+            </div>
+
+            {/* Success Message */}
+            <h2 className="text-3xl font-bold text-center text-gray-800 mb-4">
+              Ride Posted Successfully! 🎉
+            </h2>
+            <p className="text-center text-gray-600 mb-6">
+              Your ride from <span className="font-semibold text-primary">{formData.from}</span> to{' '}
+              <span className="font-semibold text-primary">{formData.to}</span> is now live!
+            </p>
+
+            {/* Ride Details Summary */}
+            <div className="bg-gray-50 rounded-lg p-4 mb-6 space-y-2">
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-600">Date & Time:</span>
+                <span className="font-semibold text-gray-800">{formData.date} at {formData.time}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-600">Available Seats:</span>
+                <span className="font-semibold text-gray-800">{formData.seats}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-600">Price per Seat:</span>
+                <span className="font-semibold text-primary">UGX {formData.price}</span>
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="space-y-3">
+              <button
+                onClick={() => {
+                  setShowSuccessModal(false)
+                  window.location.href = '/find-ride'
+                }}
+                className="w-full px-6 py-3 bg-primary text-white rounded-lg font-semibold hover:bg-opacity-90 transition-colors"
+              >
+                View All Rides
+              </button>
+              <button
+                onClick={() => setShowSuccessModal(false)}
+                className="w-full px-6 py-3 border-2 border-gray-300 text-gray-700 rounded-lg font-semibold hover:bg-gray-50 transition-colors"
+              >
+                Post Another Ride
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
