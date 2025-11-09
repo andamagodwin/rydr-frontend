@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import { web3Accounts, web3Enable } from '@polkadot/extension-dapp'
+import authService from '../services/authService'
 import { WalletContext } from '../context/walletContext'
 import useWalletStore from '../store/walletStore'
 
@@ -8,102 +9,125 @@ export function WalletProvider({ children }) {
   const [selectedAccount, setSelectedAccount] = useState(null)
   const [isConnecting, setIsConnecting] = useState(false)
   const [error, setError] = useState(null)
+  const [appwriteSession, setAppwriteSession] = useState(null)
+  const [appwriteUser, setAppwriteUser] = useState(null)
 
-  const {
-    setIsConnected,
-    setSelectedAccount: setStoreAccount,
-    setAccounts: setStoreAccounts,
-    disconnect: storeDisconnect
-  } = useWalletStore()
+  const setStoreAccounts = useWalletStore((state) => state.setAccounts)
+  const setStoreAccount = useWalletStore((state) => state.setSelectedAccount)
+  const setIsConnected = useWalletStore((state) => state.setIsConnected)
+  const storeDisconnect = useWalletStore((state) => state.disconnect)
 
-  // Check for existing connection on mount
-  useEffect(() => {
-    checkConnection()
+  const createAppwriteSession = useCallback(async (account) => {
+    try {
+      const result = await authService.loginWithWallet(
+        account.address,
+        account.meta?.name || 'Unnamed Account'
+      )
+
+      if (result?.session) {
+        setAppwriteSession(result.session)
+      }
+
+      if (result?.user) {
+        setAppwriteUser(result.user)
+      }
+    } catch (sessionError) {
+      console.error('Failed to create Appwrite session:', sessionError)
+    }
   }, [])
 
-  useEffect(() => {
-    setStoreAccounts(accounts)
-  }, [accounts, setStoreAccounts])
-
-  useEffect(() => {
-    setStoreAccount(selectedAccount)
-    setIsConnected(!!selectedAccount)
-  }, [selectedAccount, setStoreAccount, setIsConnected])
-
-  const checkConnection = async () => {
-    try {
-      const extensions = await web3Enable('Rydr')
-      if (extensions.length === 0) {
-        return
-      }
-
-      const allAccounts = await web3Accounts()
-      if (allAccounts.length > 0) {
-        setAccounts(allAccounts)
-        // Auto-select first account if previously connected
-        const savedAccount = localStorage.getItem('selectedAccount')
-        if (savedAccount) {
-          const account = allAccounts.find(acc => acc.address === savedAccount)
-          if (account) {
-            setSelectedAccount(account)
-          }
-        }
-      }
-    } catch (err) {
-      console.error('Error checking connection:', err)
-    }
-  }
-
-  const connectWallet = async () => {
-    setIsConnecting(true)
+  const connectWallet = useCallback(async (isSilent = false) => {
+    if (!isSilent) setIsConnecting(true)
     setError(null)
 
     try {
-      // Enable the Polkadot extension
       const extensions = await web3Enable('Rydr')
 
       if (extensions.length === 0) {
-        throw new Error('No Polkadot extension found. Please install Polkadot.js or Talisman wallet.')
+        throw new Error('No Polkadot wallet extension found. Please install Polkadot.js or Talisman.')
       }
 
-      // Get all accounts
       const allAccounts = await web3Accounts()
 
       if (allAccounts.length === 0) {
-        throw new Error('No accounts found. Please create an account in your Polkadot wallet.')
+        throw new Error('No accounts found in your wallet. Please create an account first.')
       }
 
       setAccounts(allAccounts)
-      
-      // Auto-select first account
-      setSelectedAccount(allAccounts[0])
-      localStorage.setItem('selectedAccount', allAccounts[0].address)
+      setStoreAccounts(allAccounts)
+
+      const savedAddress = localStorage.getItem('selectedAccount')
+      let activeAccount = selectedAccount
+
+      if (!activeAccount && savedAddress) {
+        activeAccount = allAccounts.find((acc) => acc.address === savedAddress) || null
+      }
+
+      if (!activeAccount) {
+        activeAccount = allAccounts[0]
+      }
+
+      if (activeAccount) {
+        setSelectedAccount(activeAccount)
+        localStorage.setItem('selectedAccount', activeAccount.address)
+        setStoreAccount(activeAccount)
+        setIsConnected(true)
+        await createAppwriteSession(activeAccount)
+      }
 
       return allAccounts
     } catch (err) {
-      setError(err.message)
-      console.error('Error connecting wallet:', err)
+      const errorMessage = err?.message || 'Failed to connect wallet'
+      setError(errorMessage)
       throw err
     } finally {
-      setIsConnecting(false)
+      if (!isSilent) setIsConnecting(false)
     }
-  }
+  }, [selectedAccount, createAppwriteSession, setIsConnected, setStoreAccount, setStoreAccounts])
 
-  const disconnectWallet = () => {
-    setSelectedAccount(null)
-    setAccounts([])
-    localStorage.removeItem('selectedAccount')
-    storeDisconnect()
-  }
+  const checkExistingSession = useCallback(async () => {
+    try {
+      const session = await authService.getCurrentSession()
+      if (session) {
+        setAppwriteSession(session)
+        await connectWallet(true)
+      }
+    } catch {
+      console.log('No existing Appwrite session found')
+    }
+  }, [connectWallet])
 
-  const selectAccount = (account) => {
+  useEffect(() => {
+    checkExistingSession()
+  }, [checkExistingSession])
+
+  const selectAccount = useCallback(async (account) => {
     setSelectedAccount(account)
     localStorage.setItem('selectedAccount', account.address)
-  }
+    setStoreAccount(account)
+    setIsConnected(true)
+    await createAppwriteSession(account)
+  }, [createAppwriteSession, setIsConnected, setStoreAccount])
+
+  const disconnectWallet = useCallback(async () => {
+    try {
+      await authService.logout()
+    } catch (logoutError) {
+      console.error('Error logging out from Appwrite:', logoutError)
+    } finally {
+      setAccounts([])
+      setSelectedAccount(null)
+      setAppwriteSession(null)
+      setAppwriteUser(null)
+      setError(null)
+      localStorage.removeItem('selectedAccount')
+      storeDisconnect()
+    }
+  }, [storeDisconnect])
 
   const formatAddress = (address) => {
     if (!address) return ''
-    return `${address.slice(0, 6)}...${address.slice(-4)}`
+    return `${address.slice(0, 6)}...${address.slice(-6)}`
   }
 
   const value = {
@@ -111,6 +135,8 @@ export function WalletProvider({ children }) {
     selectedAccount,
     isConnecting,
     error,
+    appwriteSession,
+    appwriteUser,
     connectWallet,
     disconnectWallet,
     selectAccount,
