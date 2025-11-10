@@ -592,7 +592,7 @@ function FindRide() {
   }
 
   return (
-    <div className="bg-gray-50 h-screen overflow-hidden">
+    <div className="bg-gray-50 h-screen overflow-hidden pt-6">
       <div className="relative h-full">
         {/* Map Section - Left Side */}
         <div className="relative h-64 md:h-full md:mr-[33.3333%]">
