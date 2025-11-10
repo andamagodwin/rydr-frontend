@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { Map } from 'lucide-react'
 import mapboxgl from 'mapbox-gl'
 import 'mapbox-gl/dist/mapbox-gl.css'
 import rideService from '../services/rideService'
@@ -11,7 +12,6 @@ function FindRide() {
   const navigate = useNavigate()
   const [fromLocation, setFromLocation] = useState('')
   const [toLocation, setToLocation] = useState('')
-  const [isMapExpanded, setIsMapExpanded] = useState(false)
 
   const [userLocation, setUserLocation] = useState(null)
   const [locationError, setLocationError] = useState(null)
@@ -20,6 +20,7 @@ function FindRide() {
   const [availableRides, setAvailableRides] = useState([])
   const [isLoadingRides, setIsLoadingRides] = useState(false)
   const [ridesError, setRidesError] = useState(null)
+  const [selectedRideId, setSelectedRideId] = useState(null)
   
   const mapContainerRef = useRef()
   const mapRef = useRef()
@@ -33,13 +34,16 @@ function FindRide() {
       const rides = await rideService.getActiveRides()
       // Transform database rides to match expected format
       const transformedRides = rides.map(ride => {
-        let fromCoords = [32.582520, 0.347596] // Default Kampala coordinates
-        let toCoords = [32.443606, 0.042068]   // Default Entebbe coordinates
+        let fromCoords = [32.582520, 0.347596] // Default Kampala coordinates [lng, lat]
+        let toCoords = [32.443606, 0.042068]   // Default Entebbe coordinates [lng, lat]
         
         try {
           if (ride.pickupCoordinates) {
             const parsed = JSON.parse(ride.pickupCoordinates)
-            if (Array.isArray(parsed) && parsed.length === 2 && !isNaN(parsed[0]) && !isNaN(parsed[1])) {
+            // Handle both object {lng, lat} and array [lng, lat] formats
+            if (parsed.lng !== undefined && parsed.lat !== undefined) {
+              fromCoords = [parsed.lng, parsed.lat]
+            } else if (Array.isArray(parsed) && parsed.length === 2 && !isNaN(parsed[0]) && !isNaN(parsed[1])) {
               fromCoords = parsed
             }
           }
@@ -50,7 +54,10 @@ function FindRide() {
         try {
           if (ride.dropoffCoordinates) {
             const parsed = JSON.parse(ride.dropoffCoordinates)
-            if (Array.isArray(parsed) && parsed.length === 2 && !isNaN(parsed[0]) && !isNaN(parsed[1])) {
+            // Handle both object {lng, lat} and array [lng, lat] formats
+            if (parsed.lng !== undefined && parsed.lat !== undefined) {
+              toCoords = [parsed.lng, parsed.lat]
+            } else if (Array.isArray(parsed) && parsed.length === 2 && !isNaN(parsed[0]) && !isNaN(parsed[1])) {
               toCoords = parsed
             }
           }
@@ -197,82 +204,57 @@ function FindRide() {
     }
   }, [])
 
-  // Update markers and routes when data changes
+  // Update markers when user location or destination changes
   useEffect(() => {
     if (!mapRef.current) return
 
-    // Clear existing markers
-    markersRef.current.forEach(marker => marker.remove())
-    markersRef.current = []
+    // Wait for map to be loaded before adding markers
+    const addUserMarkers = () => {
+      // Clear existing markers
+      markersRef.current.forEach(marker => marker.remove())
+      markersRef.current = []
 
-    // Add user location marker
-    if (userLocation) {
-      const el = document.createElement('div')
-      el.className = 'user-location-marker'
-      el.style.width = '20px'
-      el.style.height = '20px'
-      el.style.background = '#3B82F6'
-      el.style.border = '3px solid white'
-      el.style.borderRadius = '50%'
-      el.style.boxShadow = '0 2px 4px rgba(0,0,0,0.3)'
+      // Add user location marker
+      if (userLocation) {
+        const el = document.createElement('div')
+        el.className = 'user-location-marker'
+        el.style.width = '20px'
+        el.style.height = '20px'
+        el.style.background = '#3B82F6'
+        el.style.border = '3px solid white'
+        el.style.borderRadius = '50%'
+        el.style.boxShadow = '0 2px 4px rgba(0,0,0,0.3)'
 
-      const marker = new mapboxgl.Marker(el)
-        .setLngLat([userLocation[1], userLocation[0]])
-        .setPopup(new mapboxgl.Popup().setHTML('<div><strong>Your Location</strong><br/>Current position</div>'))
-        .addTo(mapRef.current)
-      
-      markersRef.current.push(marker)
+        const marker = new mapboxgl.Marker(el)
+          .setLngLat([userLocation[1], userLocation[0]])
+          .setPopup(new mapboxgl.Popup().setHTML('<div><strong>Your Location</strong><br/>Current position</div>'))
+          .addTo(mapRef.current)
+        
+        markersRef.current.push(marker)
+      }
+
+      // Add destination marker
+      if (destinationLocation) {
+        const el = document.createElement('div')
+        el.innerHTML = '📍'
+        el.style.fontSize = '24px'
+
+        const marker = new mapboxgl.Marker(el)
+          .setLngLat([destinationLocation[1], destinationLocation[0]])
+          .setPopup(new mapboxgl.Popup().setHTML(`<div><strong>Destination</strong><br/>${toLocation}</div>`))
+          .addTo(mapRef.current)
+        
+        markersRef.current.push(marker)
+      }
     }
 
-    // Add destination marker
-    if (destinationLocation) {
-      const el = document.createElement('div')
-      el.innerHTML = '📍'
-      el.style.fontSize = '24px'
-
-      const marker = new mapboxgl.Marker(el)
-        .setLngLat([destinationLocation[1], destinationLocation[0]])
-        .setPopup(new mapboxgl.Popup().setHTML(`<div><strong>Destination</strong><br/>${toLocation}</div>`))
-        .addTo(mapRef.current)
-      
-      markersRef.current.push(marker)
+    // Check if map is already loaded
+    if (mapRef.current.loaded()) {
+      addUserMarkers()
+    } else {
+      mapRef.current.on('load', addUserMarkers)
     }
-
-    // Add ride markers and routes
-    filteredRides.forEach(ride => {
-      // Pickup marker (green)
-      const pickupEl = document.createElement('div')
-      pickupEl.style.width = '12px'
-      pickupEl.style.height = '12px'
-      pickupEl.style.background = '#10B981'
-      pickupEl.style.border = '2px solid white'
-      pickupEl.style.borderRadius = '50%'
-      pickupEl.style.boxShadow = '0 2px 4px rgba(0,0,0,0.3)'
-
-      const pickupMarker = new mapboxgl.Marker(pickupEl)
-        .setLngLat(ride.coordinates.from)
-        .setPopup(new mapboxgl.Popup().setHTML(`<div><strong>Pickup</strong><br/>${ride.from}<br/>${ride.driverName}</div>`))
-        .addTo(mapRef.current)
-      
-      markersRef.current.push(pickupMarker)
-
-      // Dropoff marker (red)
-      const dropoffEl = document.createElement('div')
-      dropoffEl.style.width = '12px'
-      dropoffEl.style.height = '12px'
-      dropoffEl.style.background = '#EF4444'
-      dropoffEl.style.border = '2px solid white'
-      dropoffEl.style.borderRadius = '50%'
-      dropoffEl.style.boxShadow = '0 2px 4px rgba(0,0,0,0.3)'
-
-      const dropoffMarker = new mapboxgl.Marker(dropoffEl)
-        .setLngLat(ride.coordinates.to)
-        .setPopup(new mapboxgl.Popup().setHTML(`<div><strong>Dropoff</strong><br/>${ride.to}<br/>${formatPrice(ride.price)}</div>`))
-        .addTo(mapRef.current)
-      
-      markersRef.current.push(dropoffMarker)
-    })
-  }, [filteredRides, userLocation, destinationLocation, toLocation])
+  }, [userLocation, destinationLocation, toLocation])
 
   const handleSearch = async () => {
     if (!fromLocation && !toLocation) {
@@ -292,13 +274,16 @@ function FindRide() {
       
       // Transform database rides to match expected format
       const transformedRides = rides.map(ride => {
-        let fromCoords = [32.582520, 0.347596] // Default Kampala coordinates
-        let toCoords = [32.443606, 0.042068]   // Default Entebbe coordinates
+        let fromCoords = [32.582520, 0.347596] // Default Kampala coordinates [lng, lat]
+        let toCoords = [32.443606, 0.042068]   // Default Entebbe coordinates [lng, lat]
         
         try {
           if (ride.pickupCoordinates) {
             const parsed = JSON.parse(ride.pickupCoordinates)
-            if (Array.isArray(parsed) && parsed.length === 2 && !isNaN(parsed[0]) && !isNaN(parsed[1])) {
+            // Handle both object {lng, lat} and array [lng, lat] formats
+            if (parsed.lng !== undefined && parsed.lat !== undefined) {
+              fromCoords = [parsed.lng, parsed.lat]
+            } else if (Array.isArray(parsed) && parsed.length === 2 && !isNaN(parsed[0]) && !isNaN(parsed[1])) {
               fromCoords = parsed
             }
           }
@@ -309,7 +294,10 @@ function FindRide() {
         try {
           if (ride.dropoffCoordinates) {
             const parsed = JSON.parse(ride.dropoffCoordinates)
-            if (Array.isArray(parsed) && parsed.length === 2 && !isNaN(parsed[0]) && !isNaN(parsed[1])) {
+            // Handle both object {lng, lat} and array [lng, lat] formats
+            if (parsed.lng !== undefined && parsed.lat !== undefined) {
+              toCoords = [parsed.lng, parsed.lat]
+            } else if (Array.isArray(parsed) && parsed.length === 2 && !isNaN(parsed[0]) && !isNaN(parsed[1])) {
               toCoords = parsed
             }
           }
@@ -352,18 +340,162 @@ function FindRide() {
     navigate('/payment', { state: { ride } })
   }
 
-  const toggleMapExpansion = () => {
-    setIsMapExpanded(!isMapExpanded)
-    setTimeout(() => {
-      if (mapRef.current) {
-        mapRef.current.resize()
+  const viewRideOnMap = async (rideId) => {
+    const ride = availableRides.find(r => r.id === rideId)
+    if (!ride || !mapRef.current) return
+
+    setSelectedRideId(rideId)
+
+    const from = `${ride.coordinates.from[0]},${ride.coordinates.from[1]}`
+    const to = `${ride.coordinates.to[0]},${ride.coordinates.to[1]}`
+    
+    try {
+      const url = `https://api.mapbox.com/directions/v5/mapbox/driving/${from};${to}?geometries=geojson&overview=full&access_token=${mapboxgl.accessToken}`
+      const response = await fetch(url)
+      const data = await response.json()
+      
+      if (data.routes && data.routes.length > 0) {
+        const routeGeometry = data.routes[0].geometry
+
+        // Remove existing selected route layer if any
+        if (mapRef.current.getLayer('selected-route-line')) {
+          mapRef.current.removeLayer('selected-route-line')
+        }
+        if (mapRef.current.getLayer('selected-route-outline')) {
+          mapRef.current.removeLayer('selected-route-outline')
+        }
+        if (mapRef.current.getSource('selected-route')) {
+          mapRef.current.removeSource('selected-route')
+        }
+
+        // Clear existing markers (except user location marker)
+        const userLocationMarker = markersRef.current.find(m => 
+          m.getElement()?.className?.includes('user-location-marker')
+        )
+        markersRef.current.forEach(marker => marker.remove())
+        markersRef.current = []
+        
+        // Re-add user location marker if it exists
+        if (userLocationMarker) {
+          const el = document.createElement('div')
+          el.className = 'user-location-marker'
+          el.style.width = '20px'
+          el.style.height = '20px'
+          el.style.background = '#3B82F6'
+          el.style.border = '3px solid white'
+          el.style.borderRadius = '50%'
+          el.style.boxShadow = '0 2px 4px rgba(0,0,0,0.3)'
+
+          const marker = new mapboxgl.Marker(el)
+            .setLngLat([userLocation[1], userLocation[0]])
+            .setPopup(new mapboxgl.Popup().setHTML('<div><strong>Your Location</strong><br/>Current position</div>'))
+            .addTo(mapRef.current)
+          
+          markersRef.current.push(marker)
+        }
+
+        // Add pickup marker for selected ride (green, larger)
+        const pickupEl = document.createElement('div')
+        pickupEl.style.width = '20px'
+        pickupEl.style.height = '20px'
+        pickupEl.style.background = '#10B981'
+        pickupEl.style.border = '3px solid white'
+        pickupEl.style.borderRadius = '50%'
+        pickupEl.style.boxShadow = '0 3px 6px rgba(0,0,0,0.4)'
+
+        const pickupMarker = new mapboxgl.Marker(pickupEl)
+          .setLngLat(ride.coordinates.from)
+          .setPopup(new mapboxgl.Popup({ offset: 20 }).setHTML(`
+            <div style="padding: 6px;">
+              <strong style="color: #10B981; font-size: 14px;">📍 Pickup</strong><br/>
+              <span style="font-size: 13px; font-weight: 600;">${ride.from}</span><br/>
+              <span style="font-size: 11px; color: #666;">Driver: ${ride.driverName}</span><br/>
+              <span style="font-size: 11px; color: #666;">Time: ${ride.time}</span>
+            </div>
+          `))
+          .addTo(mapRef.current)
+        
+        markersRef.current.push(pickupMarker)
+
+        // Add dropoff marker for selected ride (red, larger)
+        const dropoffEl = document.createElement('div')
+        dropoffEl.style.width = '20px'
+        dropoffEl.style.height = '20px'
+        dropoffEl.style.background = '#EF4444'
+        dropoffEl.style.border = '3px solid white'
+        dropoffEl.style.borderRadius = '50%'
+        dropoffEl.style.boxShadow = '0 3px 6px rgba(0,0,0,0.4)'
+
+        const dropoffMarker = new mapboxgl.Marker(dropoffEl)
+          .setLngLat(ride.coordinates.to)
+          .setPopup(new mapboxgl.Popup({ offset: 20 }).setHTML(`
+            <div style="padding: 6px;">
+              <strong style="color: #EF4444; font-size: 14px;">🎯 Dropoff</strong><br/>
+              <span style="font-size: 13px; font-weight: 600;">${ride.to}</span><br/>
+              <span style="font-size: 12px; color: #E6007A; font-weight: bold;">${formatPrice(ride.price)}</span>
+            </div>
+          `))
+          .addTo(mapRef.current)
+        
+        markersRef.current.push(dropoffMarker)
+
+        // Add selected route source
+        mapRef.current.addSource('selected-route', {
+          type: 'geojson',
+          data: {
+            type: 'Feature',
+            properties: {},
+            geometry: routeGeometry
+          }
+        })
+
+        // Add selected route outline (thicker, darker)
+        mapRef.current.addLayer({
+          id: 'selected-route-outline',
+          type: 'line',
+          source: 'selected-route',
+          layout: {
+            'line-join': 'round',
+            'line-cap': 'round'
+          },
+          paint: {
+            'line-color': '#000000',
+            'line-width': 6,
+            'line-opacity': 0.4
+          }
+        })
+
+        // Add selected route line (highlighted)
+        mapRef.current.addLayer({
+          id: 'selected-route-line',
+          type: 'line',
+          source: 'selected-route',
+          layout: {
+            'line-join': 'round',
+            'line-cap': 'round'
+          },
+          paint: {
+            'line-color': '#FFD700', // Gold color for selected route
+            'line-width': 4,
+            'line-opacity': 1
+          }
+        })
+
+        // Fit map to selected route
+        const coordinates = routeGeometry.coordinates
+        const bounds = coordinates.reduce((bounds, coord) => {
+          return bounds.extend(coord)
+        }, new mapboxgl.LngLatBounds(coordinates[0], coordinates[0]))
+
+        mapRef.current.fitBounds(bounds, {
+          padding: 80,
+          maxZoom: 14
+        })
       }
-    }, 300)
+    } catch (error) {
+      console.error('Failed to fetch route:', error)
+    }
   }
-
-
-
-
 
   const handleFromInputClick = () => {
     if (userLocation) {
@@ -460,275 +592,212 @@ function FindRide() {
   }
 
   return (
-    <div className="bg-gray-50 min-h-screen py-8">
-      <div className="max-w-6xl mx-auto px-4">
-        {/* Header with Map */}
-        <div className="bg-white rounded-lg shadow-md mb-8 overflow-hidden">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between p-6 pb-4 gap-4">
-            <div>
-              <h1 className="text-3xl sm:text-4xl font-bold text-primary mb-2">Find a Ride</h1>
-              {locationError && (
-                <p className="text-sm text-amber-600 bg-amber-50 px-3 py-1 rounded-lg">
-                  📍 {locationError}
-                </p>
-              )}
-              {userLocation && !locationError && (
-                <div className="text-sm text-green-600 bg-green-50 px-3 py-2 rounded-lg">
-                  <p className="font-medium">📍 Your Location:</p>
-                  <p className="text-xs mt-1 text-gray-600">
-                    Latitude: {userLocation[0].toFixed(6)}° | Longitude: {userLocation[1].toFixed(6)}°
-                  </p>
+    <div className="bg-gray-50 h-screen overflow-hidden">
+      <div className="relative h-full">
+        {/* Map Section - Left Side */}
+        <div className="relative h-64 md:h-full md:mr-[33.3333%]">
+          <div ref={mapContainerRef} className="h-full w-full" />
+
+          {/* Floating Search Bar (inside map overlay) */}
+          <div className="absolute top-4 left-1/2 -translate-x-1/2 z-20 w-11/12 md:w-2/3 lg:w-1/2 max-w-2xl">
+            <div className="bg-white/95 backdrop-blur-sm rounded-lg shadow-lg border border-gray-200 p-3">
+              <div className="flex flex-col sm:flex-row gap-2 sm:items-end">
+                <div className="flex-1 min-w-0">
+                  <label htmlFor="from" className="block text-xs font-medium text-gray-700 mb-1">From</label>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      id="from"
+                      value={fromLocation}
+                      onChange={(e) => setFromLocation(e.target.value)}
+                      onClick={handleFromInputClick}
+                      placeholder={isGettingLocation ? "Getting location..." : "Your location"}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary transition-colors pr-8 text-sm"
+                      readOnly={isGettingLocation}
+                    />
+                    {isGettingLocation && (
+                      <div className="absolute right-2 top-1/2 -translate-y-1/2">
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
+                      </div>
+                    )}
+                    {fromLocation === 'Your Current Location' && (
+                      <div className="absolute right-2 top-1/2 -translate-y-1/2 text-green-500 text-sm">📍</div>
+                    )}
+                  </div>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <label htmlFor="to" className="block text-xs font-medium text-gray-700 mb-1">To</label>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      id="to"
+                      value={toLocation}
+                      onChange={(e) => handleToLocationChange(e.target.value)}
+                      placeholder="Destination"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary transition-colors pr-8 text-sm"
+                    />
+                    {destinationLocation && (
+                      <div className="absolute right-2 top-1/2 -translate-y-1/2 text-red-500 text-sm">📍</div>
+                    )}
+                  </div>
+                </div>
+                <button
+                  onClick={handleSearch}
+                  className="bg-primary text-white px-4 py-2 rounded-lg font-semibold hover:bg-opacity-90 transition-colors whitespace-nowrap text-sm shadow-md"
+                >
+                  Search
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Map Controls Overlay */}
+          {userLocation && !locationError && (
+            <div className="absolute top-4 left-4 bg-white/90 backdrop-blur-sm px-3 py-2 rounded-lg shadow-lg text-xs">
+              <p className="font-medium text-green-600">📍 Your Location</p>
+              <p className="text-gray-600 mt-1">{userLocation[0].toFixed(4)}°, {userLocation[1].toFixed(4)}°</p>
+            </div>
+          )}
+        </div>
+
+        {/* Rides Sidebar - Right Side (fixed on desktop) */}
+        <div className="w-full md:w-1/3 bg-white border-l border-gray-200 flex flex-col md:fixed md:top-0 md:right-0 md:h-screen">
+          {/* Fixed Header */}
+          <div className="bg-white border-b border-gray-200 p-4 flex-shrink-0">
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-bold text-gray-800">
+                Available Rides
+                {!isLoadingRides && filteredRides.length > 0 && (
+                  <span className="ml-2 text-sm font-normal text-gray-500">
+                    ({filteredRides.length})
+                  </span>
+                )}
+              </h2>
+              {isLoadingRides && (
+                <div className="flex items-center space-x-2 text-primary">
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
                 </div>
               )}
             </div>
-            <button
-              onClick={toggleMapExpansion}
-              className="flex items-center justify-center space-x-2 bg-gray-100 hover:bg-gray-200 px-4 py-2 rounded-lg transition-colors"
-            >
-              <span className="text-gray-700 font-medium">
-                {isMapExpanded ? 'Hide Map' : 'Area Map'}
-              </span>
-              <span className="text-gray-500">
-                {isMapExpanded ? '▲' : '▼'}
-              </span>
-            </button>
           </div>
 
-          {/* Mapbox Map Container */}
-          <div 
-            className={`transition-all duration-300 ease-in-out overflow-hidden ${
-              isMapExpanded 
-                ? 'h-80 sm:h-96 lg:h-[500px]'
-                : 'h-32 sm:h-40 lg:h-48'
-            }`}
-          >
-            <div 
-              ref={mapContainerRef} 
-              className="h-full w-full"
-            />
-            
-            {/* Route Counter - removed since we don't filter routes anymore */}
-          </div>
-        </div>
-
-        {/* Search Section */}
-        <div className="bg-white rounded-lg shadow-md p-4 md:p-6 mb-8">
-          <div className="flex flex-col md:flex-row gap-4 md:items-end">
-            <div className="flex-1">
-              <label htmlFor="from" className="block text-sm font-medium text-gray-700 mb-2">
-                From
-              </label>
-              <div className="relative">
-                <input
-                  type="text"
-                  id="from"
-                  value={fromLocation}
-                  onChange={(e) => setFromLocation(e.target.value)}
-                  onClick={handleFromInputClick}
-                  placeholder={isGettingLocation ? "Getting your location..." : "Click to use current location"}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary transition-colors pr-10"
-                  readOnly={isGettingLocation}
-                />
-                {isGettingLocation && (
-                  <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
-                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-primary"></div>
-                  </div>
-                )}
-                {fromLocation === 'Your Current Location' && (
-                  <div className="absolute right-3 top-1/2 transform -translate-y-1/2 text-green-500">
-                    📍
-                  </div>
-                )}
-              </div>
-            </div>
-            <div className="flex-1">
-              <label htmlFor="to" className="block text-sm font-medium text-gray-700 mb-2">
-                To
-              </label>
-              <div className="relative">
-                <input
-                  type="text"
-                  id="to"
-                  value={toLocation}
-                  onChange={(e) => handleToLocationChange(e.target.value)}
-                  placeholder="Enter destination (e.g., Kampala, Entebbe)"
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary transition-colors pr-10"
-                />
-                {destinationLocation && (
-                  <div className="absolute right-3 top-1/2 transform -translate-y-1/2 text-red-500">
-                    📍
-                  </div>
-                )}
-              </div>
-              {toLocation && !destinationLocation && toLocation.length > 2 && (
-                <p className="text-xs text-gray-500 mt-1">
-                  Try: Kampala, Entebbe, Jinja, Mbale, Gulu, Mbarara
-                </p>
-              )}
-            </div>
-            <button
-              onClick={handleSearch}
-              className="bg-primary text-white px-8 py-3 rounded-lg font-semibold hover:bg-opacity-90 transition-colors whitespace-nowrap w-full md:w-auto"
-            >
-              Search
-            </button>
-          </div>
-        </div>
-
-        {/* Available Rides Section */}
-        <div className="bg-white rounded-lg shadow-md p-6">
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-2xl font-bold text-gray-800">
-              Available Rides
-            </h2>
-            {isLoadingRides && (
-              <div className="flex items-center space-x-2 text-primary">
-                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-primary"></div>
-                <span className="text-sm">Loading rides...</span>
-              </div>
-            )}
-          </div>
-
+          {/* Fixed Error Message */}
           {ridesError && (
-            <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
+            <div className="m-4 p-3 bg-red-50 border border-red-200 rounded-lg flex-shrink-0">
               <div className="flex items-center space-x-2 text-red-700">
-                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
                   <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
                 </svg>
-                <span className="text-sm font-medium">{ridesError}</span>
+                <span className="text-xs font-medium">{ridesError}</span>
               </div>
               <button
                 onClick={fetchRides}
-                className="mt-2 text-sm text-red-600 hover:text-red-800 underline"
+                className="mt-2 text-xs text-red-600 hover:text-red-800 underline"
               >
                 Try again
               </button>
             </div>
           )}
-          
-          <div className="space-y-4">
+
+          {/* Scrollable Rides List */}
+          <div className="flex-1 overflow-y-auto">
+            <div className="p-4 space-y-3">
             {!isLoadingRides && filteredRides.map((ride) => (
               <div 
                 key={ride.id} 
-                className="border border-gray-200 rounded-lg p-3 md:p-4 transition-all hover:shadow-md"
+                className={`border rounded-lg p-3 transition-all cursor-pointer ${
+                  selectedRideId === ride.id 
+                    ? 'border-yellow-400 bg-yellow-50 shadow-lg' 
+                    : 'border-gray-200 hover:border-primary hover:shadow-md'
+                }`}
+                onClick={() => viewRideOnMap(ride.id)}
               >
-                {/* Mobile Layout */}
-                <div className="block md:hidden">
-                  {/* Header: Route */}
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center space-x-2 text-sm">
-                      <span className="text-gray-500">📍</span>
-                      <span className="font-medium">{ride.from}</span>
-                      <span className="text-gray-400">→</span>
-                      <span className="font-medium">{ride.to}</span>
-                    </div>
-                    <div className="text-primary font-bold text-lg">
-                      {formatPrice(ride.price)}
-                    </div>
-                  </div>
-
-                  {/* Driver Info & Action Row */}
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-3">
-                      <div className="w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center">
-                        <span className="text-xs font-medium text-gray-600">
-                          {ride.driverName.charAt(0)}
-                        </span>
-                      </div>
-                      <div>
-                        <div className="font-medium text-sm">{ride.driverName}</div>
-                        <div className="flex items-center space-x-1">
-                          {renderStars(ride.rating)}
-                          <span className="text-xs text-gray-500">({ride.rating})</span>
-                        </div>
-                      </div>
-                    </div>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        handleRequestRide(ride.id)
-                      }}
-                      className="bg-primary text-white px-4 py-2 rounded-lg font-medium hover:bg-opacity-90 transition-colors text-sm"
-                    >
-                      Request
-                    </button>
+                {/* Route Header */}
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center space-x-2 text-xs">
+                    <span className="text-gray-500">📍</span>
+                    <span className="font-medium text-gray-700">{ride.from}</span>
+                    <span className="text-gray-400">→</span>
+                    <span className="font-medium text-gray-700">{ride.to}</span>
                   </div>
                 </div>
 
-                {/* Desktop Layout */}
-                <div className="hidden md:block">
-                  <div className="grid grid-cols-3 gap-4 items-center">
-                    {/* Column 1: From/To */}
-                    <div className="space-y-1">
-                      <div className="flex items-center space-x-2">
-                        <span className="text-gray-600 text-sm">From:</span>
-                        <span className="font-medium">{ride.from}</span>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <span className="text-gray-600 text-sm">To:</span>
-                        <span className="font-medium">{ride.to}</span>
-                      </div>
+                {/* Driver Info */}
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center space-x-2">
+                    <div className="w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center flex-shrink-0">
+                      <span className="text-xs font-medium text-gray-600">
+                        {ride.driverName.charAt(0)}
+                      </span>
                     </div>
-
-                    {/* Column 2: Driver Name and Rating */}
-                    <div className="text-left">
-                      <div className="font-semibold text-gray-800 mb-1">{ride.driverName}</div>
+                    <div className="min-w-0">
+                      <div className="font-medium text-sm text-gray-800 truncate">{ride.driverName}</div>
                       <div className="flex items-center space-x-1">
                         {renderStars(ride.rating)}
-                        <span className="text-sm text-gray-600 ml-1">({ride.rating})</span>
+                        <span className="text-xs text-gray-500">({ride.rating})</span>
                       </div>
-                    </div>
-
-                    {/* Column 3: Price and Request Button */}
-                    <div className="text-right">
-                      <div className="text-primary font-bold text-lg mb-2">
-                        {formatPrice(ride.price)}
-                      </div>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          handleRequestRide(ride.id)
-                        }}
-                        className="bg-primary text-white px-6 py-2 rounded-lg font-medium hover:bg-opacity-90 transition-colors"
-                      >
-                        Request Ride
-                      </button>
                     </div>
                   </div>
+                  <div className="text-primary font-bold text-base flex-shrink-0 ml-2">
+                    {formatPrice(ride.price)}
+                  </div>
+                </div>
+
+                {/* Date, Time, Seats */}
+                <div className="flex items-center justify-between text-xs text-gray-600 mb-3">
+                  <span>🗓️ {ride.date}</span>
+                  <span>🕐 {ride.time}</span>
+                  <span>💺 {ride.seats} seats</span>
+                </div>
+
+                {/* Action Buttons */}
+                <div className="flex gap-2">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      viewRideOnMap(ride.id)
+                    }}
+                    className={`flex-1 border-2 px-3 py-2 rounded-lg font-medium transition-colors text-xs flex items-center justify-center gap-1 ${
+                      selectedRideId === ride.id
+                        ? 'border-yellow-500 bg-yellow-500 text-white'
+                        : 'border-primary text-primary hover:bg-primary hover:text-white'
+                    }`}
+                  >
+                    <Map size={14} />
+                    {selectedRideId === ride.id ? 'Viewing' : 'View Map'}
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      handleRequestRide(ride.id)
+                    }}
+                    className="flex-1 bg-primary text-white px-3 py-2 rounded-lg font-medium hover:bg-opacity-90 transition-colors text-xs"
+                  >
+                    Request
+                  </button>
                 </div>
               </div>
             ))}
-          </div>
 
-          {!isLoadingRides && filteredRides.length === 0 && !ridesError && (
-            <div className="text-center py-12">
-              <p className="text-gray-500 text-lg">No rides available at the moment.</p>
-              <p className="text-gray-400 text-sm mt-2">Try adjusting your search criteria or refresh the page.</p>
-              <button
-                onClick={fetchRides}
-                className="mt-4 bg-primary text-white px-6 py-2 rounded-lg font-medium hover:bg-opacity-90 transition-colors"
-              >
-                Refresh Rides
-              </button>
-            </div>
-          )}
-
-          {/* Map Interaction Hint */}
-          {isMapExpanded && filteredRides.length > 0 && (
-            <div className="mt-6 p-4 bg-blue-50 rounded-lg">
-              <div className="flex items-center space-x-2 text-blue-800">
-                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
-                </svg>
-                <span className="text-sm font-medium">
-                  Tip: All available rides are shown on the map!
-                </span>
+            {/* Empty State */}
+            {!isLoadingRides && filteredRides.length === 0 && !ridesError && (
+              <div className="text-center py-12 px-4">
+                <div className="text-gray-400 text-5xl mb-3">🚗</div>
+                <p className="text-gray-500 font-medium">No rides available</p>
+                <p className="text-gray-400 text-sm mt-2">Try adjusting your search criteria</p>
+                <button
+                  onClick={fetchRides}
+                  className="mt-4 bg-primary text-white px-4 py-2 rounded-lg font-medium hover:bg-opacity-90 transition-colors text-sm"
+                >
+                  Refresh Rides
+                </button>
               </div>
-            </div>
-          )}
+            )}
+          </div>
         </div>
       </div>
     </div>
+  </div>
   )
 }
 
