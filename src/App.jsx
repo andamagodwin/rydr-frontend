@@ -1,6 +1,6 @@
 import React from 'react'
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'
-import { WalletProvider } from './components/WalletProvider'
+import { WalletProvider } from './components/EthereumWalletProvider'
 import Navbar from './components/Navbar'
 import Footer from './components/Footer'
 import Welcome from './components/Welcome'

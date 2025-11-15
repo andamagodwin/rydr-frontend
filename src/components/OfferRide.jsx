@@ -3,7 +3,7 @@ import mapboxgl from 'mapbox-gl'
 import 'mapbox-gl/dist/mapbox-gl.css'
 import { Check, AlertCircle, CheckCircle, X } from 'lucide-react'
 import useWalletStore from '../store/walletStore'
-import rideService from '../services/rideService'
+import contractService from '../services/contractService'
 
 // Mapbox access token
 mapboxgl.accessToken = 'pk.eyJ1IjoiYW5kYW1hZXpyYSIsImEiOiJjbWM3djMyamcwMmxuMmxzYTFsMThpNTJwIn0.9H7kNoaCYW0Kiw0wzrLfhQ'
@@ -416,40 +416,19 @@ function OfferRide() {
     setIsSubmitting(true)
 
     try {
-      // Prepare ride data for Appwrite - matching exact schema
-      const rideData = {
-        driverWallet: selectedAccount.address,
-        driverName: formData.driverName,
-        driverPhone: formData.driverPhone || '',
-        vehicleType: formData.vehicleType,
-        vehicleMake: formData.vehicleMake || '',
-        vehicleModel: formData.vehicleModel || '',
-        vehicleColor: formData.vehicleColor || '',
-        registrationNumber: formData.registrationNumber,
-        from: formData.from,
-        to: formData.to,
-        date: formData.date,
-        time: formData.time,
-        seats: formData.seats,
-        price: formData.price,
-        description: formData.description || '',
-        // pickupLocation is [lng, lat] array from Mapbox
-        pickupCoordinates: JSON.stringify({ 
-          lng: pickupLocation[0], 
-          lat: pickupLocation[1] 
-        }),
-        // dropoffLocation is [lng, lat] array from Mapbox
-        dropoffCoordinates: JSON.stringify({ 
-          lng: dropoffLocation[0], 
-          lat: dropoffLocation[1] 
-        }),
-        status: 'active'
-      }
+      // Create ride on smart contract
+      // Note: Smart contract only stores fromLocation, toLocation, and price
+      // Additional metadata can be stored off-chain if needed
+      
+      const fromLocation = formData.from
+      const toLocation = formData.to
+      const priceInEth = formData.price // Assuming price is in ETH
 
-      console.log('Submitting ride to Appwrite:', rideData)
+      console.log('Creating ride on smart contract:', { fromLocation, toLocation, priceInEth })
 
-      // Submit to Appwrite
-      await rideService.createRide(rideData)
+      const result = await contractService.createRide(fromLocation, toLocation, priceInEth)
+      
+      console.log('Ride created successfully:', result)
       
       // Show success modal
       setShowSuccessModal(true)
@@ -478,7 +457,7 @@ function OfferRide() {
       
     } catch (error) {
       console.error('Error posting ride:', error)
-      alert('Failed to post ride. Please try again.')
+      alert(error.message || 'Failed to post ride. Please try again.')
     } finally {
       setIsSubmitting(false)
     }
