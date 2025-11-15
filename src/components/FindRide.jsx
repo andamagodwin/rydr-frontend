@@ -4,6 +4,7 @@ import { Map } from 'lucide-react'
 import mapboxgl from 'mapbox-gl'
 import 'mapbox-gl/dist/mapbox-gl.css'
 import contractService from '../services/contractService'
+import rideService from '../services/rideService'
 
 // Mapbox access token
 mapboxgl.accessToken = 'pk.eyJ1IjoiYW5kYW1hZXpyYSIsImEiOiJjbWM3djMyamcwMmxuMmxzYTFsMThpNTJwIn0.9H7kNoaCYW0Kiw0wzrLfhQ'
@@ -26,41 +27,48 @@ function FindRide() {
   const mapRef = useRef()
   const markersRef = useRef([])
 
-  // Fetch rides from blockchain
+  // Fetch rides from Appwrite (has coordinates) and verify with blockchain
   const fetchRides = async () => {
     setIsLoadingRides(true)
     setRidesError(null)
     try {
-      // Get all active rides from smart contract
-      const rides = await contractService.getAllActiveRides()
+      // Get all active rides from Appwrite (includes coordinates and metadata)
+      const appwriteRides = await rideService.getActiveRides()
       
-      console.log('Fetched rides from blockchain:', rides)
+      console.log('Fetched rides from Appwrite:', appwriteRides)
       
-      // Transform blockchain rides to match expected format
-      const transformedRides = rides.map(ride => {
-        // Default coordinates for Uganda locations
-        let fromCoords = [32.582520, 0.347596] // Default Kampala coordinates [lng, lat]
-        let toCoords = [32.443606, 0.042068]   // Default Entebbe coordinates [lng, lat]
-        
-        // You could add geocoding here based on ride.fromLocation and ride.toLocation
-        // For now, using default coordinates
+      // Transform to match expected format
+      const transformedRides = appwriteRides.map(ride => {
+        // Parse coordinates from "lat,lng" format
+        const pickupCoords = ride.pickupCoordinates.split(',').map(Number) // [lat, lng]
+        const dropoffCoords = ride.dropoffCoordinates.split(',').map(Number) // [lat, lng]
         
         return {
-          id: ride.id,
-          from: ride.fromLocation,
-          to: ride.toLocation,
-          driverAddress: ride.driver,
-          driverName: ride.driver.substring(0, 6) + '...' + ride.driver.substring(38), // Shortened address as name
-          rating: 4.5, // Default rating
-          price: parseFloat(ride.price), // Price is already in ETH
-          priceWei: ride.priceWei,
+          id: ride.$id, // Appwrite document ID
+          appwriteId: ride.$id,
+          from: ride.from,
+          to: ride.to,
+          driverAddress: ride.driverWallet,
+          driverName: ride.driverName || (ride.driverWallet.substring(0, 6) + '...' + ride.driverWallet.substring(38)),
+          driverPhone: ride.driverPhone,
+          vehicleType: ride.vehicleType,
+          vehicleMake: ride.vehicleMake,
+          vehicleModel: ride.vehicleModel,
+          vehicleColor: ride.vehicleColor,
+          registrationNumber: ride.registrationNumber,
+          rating: 4.5, // Could be calculated from reviews
+          price: parseFloat(ride.price),
+          seats: ride.seats,
+          date: ride.date,
+          time: ride.time,
+          description: ride.description,
           coordinates: {
-            from: fromCoords,
-            to: toCoords
+            from: [pickupCoords[1], pickupCoords[0]], // [lng, lat]
+            to: [dropoffCoords[1], dropoffCoords[0]]
           },
           color: '#E6007A',
           status: ride.status,
-          statusName: ride.statusName
+          blockchainTxHash: ride.blockchainTxHash
         }
       })
       

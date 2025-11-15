@@ -4,6 +4,7 @@ import 'mapbox-gl/dist/mapbox-gl.css'
 import { Check, AlertCircle, CheckCircle, X } from 'lucide-react'
 import useWalletStore from '../store/walletStore'
 import contractService from '../services/contractService'
+import rideService from '../services/rideService'
 
 // Mapbox access token
 mapboxgl.accessToken = 'pk.eyJ1IjoiYW5kYW1hZXpyYSIsImEiOiJjbWM3djMyamcwMmxuMmxzYTFsMThpNTJwIn0.9H7kNoaCYW0Kiw0wzrLfhQ'
@@ -416,19 +417,45 @@ function OfferRide() {
     setIsSubmitting(true)
 
     try {
-      // Create ride on smart contract
-      // Note: Smart contract only stores fromLocation, toLocation, and price
-      // Additional metadata can be stored off-chain if needed
-      
+      // Step 1: Create ride on smart contract (for escrow and payment)
       const fromLocation = formData.from
       const toLocation = formData.to
-      const priceInEth = formData.price // Assuming price is in ETH
+      const priceInEth = formData.price
 
       console.log('Creating ride on smart contract:', { fromLocation, toLocation, priceInEth })
 
-      const result = await contractService.createRide(fromLocation, toLocation, priceInEth)
+      const blockchainResult = await contractService.createRide(fromLocation, toLocation, priceInEth)
       
-      console.log('Ride created successfully:', result)
+      console.log('Ride created on blockchain:', blockchainResult)
+      
+      // Step 2: Save ride details to Appwrite (for coordinates and metadata)
+      const appwriteData = {
+        driverWallet: selectedAccount.address,
+        driverName: formData.driverName,
+        driverPhone: formData.driverPhone || '',
+        vehicleType: formData.vehicleType,
+        vehicleMake: formData.vehicleMake || '',
+        vehicleModel: formData.vehicleModel || '',
+        vehicleColor: formData.vehicleColor || '',
+        registrationNumber: formData.registrationNumber,
+        from: formData.from,
+        to: formData.to,
+        pickupCoordinates: `${pickupLocation[1]},${pickupLocation[0]}`, // "lat,lng"
+        dropoffCoordinates: `${dropoffLocation[1]},${dropoffLocation[0]}`, // "lat,lng"
+        date: formData.date,
+        time: formData.time,
+        seats: formData.seats,
+        price: formData.price,
+        description: formData.description || '',
+        status: 'active',
+        blockchainTxHash: blockchainResult.transactionHash || ''
+      }
+
+      console.log('Saving ride metadata to Appwrite:', appwriteData)
+
+      await rideService.createRide(appwriteData)
+      
+      console.log('Ride saved successfully to both blockchain and Appwrite')
       
       // Show success modal
       setShowSuccessModal(true)

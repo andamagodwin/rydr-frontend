@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import { ethers } from 'ethers'
 import contractService from '../services/contractService'
+import authService from '../services/authService'
 import { WalletContext } from '../context/walletContext'
 import useWalletStore from '../store/walletStore'
 import { CHAIN_ID } from '../config/contract'
@@ -125,6 +126,15 @@ export function WalletProvider({ children }) {
 
       // Initialize contract service
       await contractService.initSigner()
+
+      // Login to Appwrite and create/update user document
+      try {
+        await authService.loginWithWallet(userAccount, 'MetaMask Account')
+        console.log('User registered/updated in Appwrite')
+      } catch (authError) {
+        console.error('Failed to register user in Appwrite:', authError)
+        // Don't throw - allow wallet connection even if Appwrite fails
+      }
 
       // Store account info
       const accountData = {
