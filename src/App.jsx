@@ -7,6 +7,7 @@ import Welcome from './components/Welcome'
 import FindRide from './components/FindRide'
 import Payment from './components/Payment'
 import OfferRide from './components/OfferRide'
+import MyRides from './components/MyRides'
 import ConnectWallet from './components/ConnectWallet'
 import './App.css'
 
@@ -23,6 +24,7 @@ function App() {
               <Route path="/find-ride" element={<FindRide />} />
               <Route path="/payment" element={<Payment />} />
               <Route path="/offer-ride" element={<OfferRide />} />
+              <Route path="/my-rides" element={<MyRides />} />
               <Route path="/connect-wallet" element={<ConnectWallet />} />
             </Routes>
           </main>
