@@ -24,12 +24,8 @@ function MyRides() {
       const offered = await rideService.getRidesByDriver(selectedAccount.address)
       setOfferedRides(offered)
 
-      // Fetch rides booked by this user (you'll need to add this method to rideService)
-      // For now, we'll filter from all rides
-      const allRides = await rideService.getActiveRides()
-      const booked = allRides.filter(ride => 
-        ride.passengerWallet && ride.passengerWallet === selectedAccount.address
-      )
+      // Fetch rides booked by this user (as passenger)
+      const booked = await rideService.getRidesByPassenger(selectedAccount.address)
       setBookedRides(booked)
 
       console.log('Offered rides:', offered)

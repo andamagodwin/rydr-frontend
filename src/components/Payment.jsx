@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import useWalletStore from '../store/walletStore'
 import contractService from '../services/contractService'
+import rideService from '../services/rideService'
 import { CheckCircle, XCircle, Loader, ArrowLeft } from 'lucide-react'
 import { ethers } from 'ethers'
 
@@ -79,13 +80,17 @@ function Payment() {
 		setTxHash(null)
 
 		try {
-			// Book the ride by sending payment
+			// Book the ride by sending payment on blockchain
 			const result = await contractService.bookRide(ride.blockchainRideId, ride.price)
+			
+			// Update Appwrite database with passenger wallet and status
+			await rideService.updateRideWithPassenger(ride.$id, selectedAccount.address)
 			
 			setTxHash(result.transactionHash)
 			setStatus('booked')
 			
 			console.log('Ride booked successfully:', result)
+			console.log('Passenger wallet updated in database:', selectedAccount.address)
 		} catch (err) {
 			console.error('Booking failed:', err)
 			setError(err.message || 'Failed to book ride. Please try again.')

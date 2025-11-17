@@ -241,6 +241,46 @@ class ContractService {
         await this.initSigner()
       }
 
+      // First, verify the ride exists and get its details
+      const rideCount = await this.contract.rideCount()
+      console.log('Total rides on blockchain:', rideCount.toString())
+      
+      if (BigInt(rideId) >= BigInt(rideCount)) {
+        throw new Error(`Ride ID ${rideId} does not exist on the blockchain. Only ${rideCount} rides have been created.`)
+      }
+
+      // Get ride details to validate
+      const rideDetails = await this.contract.getRide(rideId)
+      console.log('Ride details from blockchain:', {
+        driver: rideDetails[0],
+        passenger: rideDetails[1],
+        fromLocation: rideDetails[2],
+        toLocation: rideDetails[3],
+        price: ethers.formatEther(rideDetails[4]),
+        status: rideDetails[5]
+      })
+
+      // Check if ride is already booked (status 1 = Booked)
+      if (rideDetails[5] === 1) {
+        throw new Error('This ride has already been booked by another passenger.')
+      }
+
+      // Check if ride is completed (status 2 = Completed)
+      if (rideDetails[5] === 2) {
+        throw new Error('This ride has already been completed.')
+      }
+
+      // Check if ride is cancelled (status 3 = Cancelled)
+      if (rideDetails[5] === 3) {
+        throw new Error('This ride has been cancelled.')
+      }
+
+      // Check if user is trying to book their own ride
+      const signerAddress = await this.signer.getAddress()
+      if (rideDetails[0].toLowerCase() === signerAddress.toLowerCase()) {
+        throw new Error('You cannot book your own ride.')
+      }
+
       const priceInWei = ethers.parseEther(priceInEth.toString())
 
       console.log('Booking ride:', { rideId, priceInWei: priceInWei.toString() })
