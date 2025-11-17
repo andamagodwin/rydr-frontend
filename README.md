@@ -1,6 +1,8 @@
-# 🚗 RYDR - Decentralized Ride-Sharing on Polkadot
-
 <div align="center">
+
+<img src="./public/rydr-logo.png" alt="RYDR Logo" width="200"/>
+
+# 🚗 RYDR - Decentralized Ride-Sharing on Polkadot
   
 ![RYDR Banner](https://img.shields.io/badge/Polkadot-Hackathon-E6007A?style=for-the-badge&logo=polkadot&logoColor=white)
 ![Moonbase Alpha](https://img.shields.io/badge/Moonbase-Alpha-53CBC9?style=for-the-badge)
