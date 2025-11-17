@@ -126,7 +126,7 @@ function Payment() {
 		)
 	}
 
-	const formatPrice = (price) => `${parseFloat(price).toFixed(4)} ETH`
+	const formatPrice = (price) => `${parseFloat(price).toFixed(4)} DEV`
 
 	return (
 		<div className="bg-gray-50 min-h-screen py-10">
@@ -191,18 +191,18 @@ function Payment() {
 						</h2>
 						{isConnected && selectedAccount ? (
 							<div className="space-y-2">
-								<div>
-									<span className="text-sm text-gray-600">Address:</span>
-									<p className="text-sm font-mono break-all">{selectedAccount.address}</p>
-								</div>
-								<div>
-									<span className="text-sm text-gray-600">Balance:</span>
-									<p className="text-sm font-semibold">{parseFloat(balance).toFixed(4)} ETH</p>
-								</div>
+							<div>
+								<span className="text-sm text-gray-600">Address:</span>
+								<p className="text-sm font-mono break-all">{selectedAccount.address}</p>
 							</div>
-						) : (
-							<div className="text-sm text-amber-700 bg-amber-100 px-4 py-3 rounded-lg">
-								⚠️ Wallet not connected. Please connect your wallet to proceed.
+							<div>
+								<span className="text-sm text-gray-600">Balance:</span>
+								<p className="text-sm font-semibold">{parseFloat(balance).toFixed(4)} DEV</p>
+							</div>
+						</div>
+					) : (
+						<div className="text-sm text-amber-700 bg-amber-100 px-4 py-3 rounded-lg">
+							⚠️ Wallet not connected. Please connect your wallet to proceed.
 							</div>
 						)}
 					</div>

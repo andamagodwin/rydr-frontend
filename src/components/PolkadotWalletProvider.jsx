@@ -53,7 +53,7 @@ export function PolkadotWalletProvider({ children }) {
       setSelectedAccount(account)
       localStorage.setItem('polkadot_selected_account', account.address)
 
-      const ethAddress = account.ethAddress
+      let ethAddress = account.ethAddress
 
       console.log('✅ Selected Polkadot account:', {
         name: account.displayName,
@@ -62,7 +62,38 @@ export function PolkadotWalletProvider({ children }) {
         source: account.source
       })
 
-      // Update Zustand store for global state
+      // Request EVM account access from SubWallet/Talisman
+      // This triggers the wallet popup for EVM permissions
+      try {
+        let ethereumProvider = window.ethereum
+
+        // Find the correct Polkadot wallet provider
+        if (window.SubWallet) {
+          ethereumProvider = window.SubWallet
+        } else if (window.ethereum?.providers && Array.isArray(window.ethereum.providers)) {
+          const subwallet = window.ethereum.providers.find(p => p.isSubWallet)
+          const talisman = window.ethereum.providers.find(p => p.isTalisman)
+          ethereumProvider = subwallet || talisman || window.ethereum
+        }
+
+        if (ethereumProvider) {
+          console.log('🔐 Requesting EVM account access...')
+          const evmAccounts = await ethereumProvider.request({ 
+            method: 'eth_requestAccounts' 
+          })
+          
+          // Use the actual EVM account from the wallet, not the converted one
+          if (evmAccounts && evmAccounts.length > 0) {
+            ethAddress = evmAccounts[0]
+            console.log('✅ Using actual EVM address from wallet:', ethAddress)
+          }
+        }
+      } catch (evmErr) {
+        console.warn('⚠️ EVM account request warning:', evmErr.message)
+        // Continue even if EVM request fails
+      }
+
+      // Update Zustand store for global state with the actual EVM address
       const accountData = {
         address: ethAddress,
         meta: { 

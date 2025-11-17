@@ -555,7 +555,7 @@ function FindRide() {
   }
 
   const formatPrice = (price) => {
-    return `${parseFloat(price).toFixed(4)} ETH`
+    return `${parseFloat(price).toFixed(4)} DEV`
   }
 
   return (

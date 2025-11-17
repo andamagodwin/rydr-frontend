@@ -87,6 +87,13 @@ function Navbar() {
             <span className="absolute -bottom-1 left-1/2 w-0 transition-all h-0.5 bg-primary group-hover:w-3/6"></span>
             <span className="absolute -bottom-1 right-1/2 w-0 transition-all h-0.5 bg-primary group-hover:w-3/6"></span>
           </Link>
+          {isConnected && (
+            <Link to="/my-account" className="group relative w-max">
+              <span className="text-gray-700 hover:text-primary transition-colors">My Account</span>
+              <span className="absolute -bottom-1 left-1/2 w-0 transition-all h-0.5 bg-primary group-hover:w-3/6"></span>
+              <span className="absolute -bottom-1 right-1/2 w-0 transition-all h-0.5 bg-primary group-hover:w-3/6"></span>
+            </Link>
+          )}
           
           {selectedAccount ? (
             <div className="flex items-center space-x-3">
@@ -320,6 +327,23 @@ function Navbar() {
                 <span className={`absolute -bottom-1 right-1/2 transition-all h-0.5 bg-primary ${isActivePage('/my-rides') ? 'w-3/6' : 'w-0 group-hover:w-3/6'}`}></span>
               </span>
             </Link>
+
+            {isConnected && (
+              <Link
+                to="/my-account"
+                onClick={closeMobileMenu}
+                className={`flex items-center space-x-3 px-4 py-3 transition-colors ${isActivePage('/my-account') ? 'text-primary' : 'text-gray-700 hover:text-primary'}`}
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                </svg>
+                <span className="group relative w-max font-medium">
+                  My Account
+                  <span className={`absolute -bottom-1 left-1/2 transition-all h-0.5 bg-primary ${isActivePage('/my-account') ? 'w-3/6' : 'w-0 group-hover:w-3/6'}`}></span>
+                  <span className={`absolute -bottom-1 right-1/2 transition-all h-0.5 bg-primary ${isActivePage('/my-account') ? 'w-3/6' : 'w-0 group-hover:w-3/6'}`}></span>
+                </span>
+              </Link>
+            )}
           </div>
         </div>
       </div>
