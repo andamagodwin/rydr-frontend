@@ -58,7 +58,27 @@ class RideService {
       )
       return rides.documents
     } catch (error) {
-      console.error('Error fetching driver rides:', error)
+      console.error('Error fetching rides by driver:', error)
+      throw error
+    }
+  }
+
+  /**
+   * Get rides booked by passenger wallet
+   */
+  async getRidesByPassenger(walletAddress) {
+    try {
+      const rides = await databases.listDocuments(
+        DATABASE_ID,
+        RIDES_COLLECTION_ID,
+        [
+          Query.equal('passengerWallet', walletAddress),
+          Query.orderDesc('$createdAt')
+        ]
+      )
+      return rides.documents
+    } catch (error) {
+      console.error('Error fetching rides by passenger:', error)
       throw error
     }
   }

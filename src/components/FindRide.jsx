@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { Map } from 'lucide-react'
 import mapboxgl from 'mapbox-gl'
 import 'mapbox-gl/dist/mapbox-gl.css'
+import contractService from '../services/contractService'
 import rideService from '../services/rideService'
 
 // Mapbox access token
@@ -26,68 +27,62 @@ function FindRide() {
   const mapRef = useRef()
   const markersRef = useRef([])
 
-  // Fetch rides from database
+  // Fetch rides from Appwrite (has coordinates) and verify with blockchain
   const fetchRides = async () => {
     setIsLoadingRides(true)
     setRidesError(null)
     try {
-      const rides = await rideService.getActiveRides()
-      // Transform database rides to match expected format
-      const transformedRides = rides.map(ride => {
-        let fromCoords = [32.582520, 0.347596] // Default Kampala coordinates [lng, lat]
-        let toCoords = [32.443606, 0.042068]   // Default Entebbe coordinates [lng, lat]
+      // Get all active rides from Appwrite (includes coordinates and metadata)
+      const appwriteRides = await rideService.getActiveRides()
+      
+      console.log('Fetched rides from Appwrite:', appwriteRides)
+      
+      // Transform to match expected format
+      const transformedRides = appwriteRides.map(ride => {
+        // Parse coordinates from "lat,lng" format
+        const pickupCoords = ride.pickupCoordinates.split(',').map(Number) // [lat, lng]
+        const dropoffCoords = ride.dropoffCoordinates.split(',').map(Number) // [lat, lng]
         
-        try {
-          if (ride.pickupCoordinates) {
-            const parsed = JSON.parse(ride.pickupCoordinates)
-            // Handle both object {lng, lat} and array [lng, lat] formats
-            if (parsed.lng !== undefined && parsed.lat !== undefined) {
-              fromCoords = [parsed.lng, parsed.lat]
-            } else if (Array.isArray(parsed) && parsed.length === 2 && !isNaN(parsed[0]) && !isNaN(parsed[1])) {
-              fromCoords = parsed
-            }
-          }
-        } catch (err) {
-          console.warn('Invalid pickup coordinates:', ride.pickupCoordinates, err)
-        }
-        
-        try {
-          if (ride.dropoffCoordinates) {
-            const parsed = JSON.parse(ride.dropoffCoordinates)
-            // Handle both object {lng, lat} and array [lng, lat] formats
-            if (parsed.lng !== undefined && parsed.lat !== undefined) {
-              toCoords = [parsed.lng, parsed.lat]
-            } else if (Array.isArray(parsed) && parsed.length === 2 && !isNaN(parsed[0]) && !isNaN(parsed[1])) {
-              toCoords = parsed
-            }
-          }
-        } catch (err) {
-          console.warn('Invalid dropoff coordinates:', ride.dropoffCoordinates, err)
-        }
-
         return {
-          id: ride.$id,
+          id: ride.$id, // Appwrite document ID
+          appwriteId: ride.$id,
+          blockchainRideId: ride.blockchainRideId, // Blockchain ride ID for contract calls
           from: ride.from,
           to: ride.to,
-          driverName: ride.driverName,
-          rating: 4.5, // Default rating - you may want to add this to database later
-          price: parseInt(ride.price) || 0,
-          coordinates: {
-            from: fromCoords,
-            to: toCoords
-          },
-          color: '#E6007A', // Default color
+          driverAddress: ride.driverWallet,
+          driverName: ride.driverName || (ride.driverWallet.substring(0, 6) + '...' + ride.driverWallet.substring(38)),
+          driverPhone: ride.driverPhone,
           vehicleType: ride.vehicleType,
+          vehicleMake: ride.vehicleMake,
+          vehicleModel: ride.vehicleModel,
+          vehicleColor: ride.vehicleColor,
+          registrationNumber: ride.registrationNumber,
+          rating: 4.5, // Could be calculated from reviews
+          price: parseFloat(ride.price),
           seats: ride.seats,
           date: ride.date,
           time: ride.time,
-          description: ride.description
+          description: ride.description,
+          coordinates: {
+            from: [pickupCoords[1], pickupCoords[0]], // [lng, lat]
+            to: [dropoffCoords[1], dropoffCoords[0]]
+          },
+          color: '#E6007A',
+          status: ride.status,
+          blockchainTxHash: ride.blockchainTxHash
         }
       })
+      
       setAvailableRides(transformedRides)
     } catch (error) {
       console.error('Failed to fetch rides:', error)
-      setRidesError('Failed to load rides. Please try again.')
+      
+      // Check if it's a contract not found error
+      if (error.message.includes('could not decode result data')) {
+        setRidesError('Smart contract not found at the configured address. Please ensure your contract is deployed to Moonbase Alpha network and the address is correct in your .env file.')
+      } else {
+        setRidesError(error.message || 'Failed to load rides. Please try again.')
+      }
       setAvailableRides([])
     } finally {
       setIsLoadingRides(false)
@@ -265,69 +260,46 @@ function FindRide() {
     setIsLoadingRides(true)
     setRidesError(null)
     try {
-      let rides
-      if (fromLocation || toLocation) {
-        rides = await rideService.searchRides(fromLocation, toLocation)
-      } else {
-        rides = await rideService.getActiveRides()
-      }
+      // Get all active rides from blockchain
+      const rides = await contractService.getAllActiveRides()
       
-      // Transform database rides to match expected format
-      const transformedRides = rides.map(ride => {
+      // Filter by location if specified
+      const filteredRides = rides.filter(ride => {
+        const matchesFrom = !fromLocation || 
+          ride.fromLocation.toLowerCase().includes(fromLocation.toLowerCase())
+        const matchesTo = !toLocation || 
+          ride.toLocation.toLowerCase().includes(toLocation.toLowerCase())
+        return matchesFrom && matchesTo
+      })
+      
+      // Transform blockchain rides to match expected format
+      const transformedRides = filteredRides.map(ride => {
         let fromCoords = [32.582520, 0.347596] // Default Kampala coordinates [lng, lat]
         let toCoords = [32.443606, 0.042068]   // Default Entebbe coordinates [lng, lat]
         
-        try {
-          if (ride.pickupCoordinates) {
-            const parsed = JSON.parse(ride.pickupCoordinates)
-            // Handle both object {lng, lat} and array [lng, lat] formats
-            if (parsed.lng !== undefined && parsed.lat !== undefined) {
-              fromCoords = [parsed.lng, parsed.lat]
-            } else if (Array.isArray(parsed) && parsed.length === 2 && !isNaN(parsed[0]) && !isNaN(parsed[1])) {
-              fromCoords = parsed
-            }
-          }
-        } catch (err) {
-          console.warn('Invalid pickup coordinates:', ride.pickupCoordinates, err)
-        }
-        
-        try {
-          if (ride.dropoffCoordinates) {
-            const parsed = JSON.parse(ride.dropoffCoordinates)
-            // Handle both object {lng, lat} and array [lng, lat] formats
-            if (parsed.lng !== undefined && parsed.lat !== undefined) {
-              toCoords = [parsed.lng, parsed.lat]
-            } else if (Array.isArray(parsed) && parsed.length === 2 && !isNaN(parsed[0]) && !isNaN(parsed[1])) {
-              toCoords = parsed
-            }
-          }
-        } catch (err) {
-          console.warn('Invalid dropoff coordinates:', ride.dropoffCoordinates, err)
-        }
-
         return {
-          id: ride.$id,
-          from: ride.from,
-          to: ride.to,
-          driverName: ride.driverName,
-          rating: 4.5, // Default rating - you may want to add this to database later
-          price: parseInt(ride.price) || 0,
+          id: ride.id,
+          from: ride.fromLocation,
+          to: ride.toLocation,
+          driverAddress: ride.driver,
+          driverName: ride.driver.substring(0, 6) + '...' + ride.driver.substring(38),
+          rating: 4.5,
+          price: parseFloat(ride.price),
+          priceWei: ride.priceWei,
           coordinates: {
             from: fromCoords,
             to: toCoords
           },
-          color: '#E6007A', // Default color
-          vehicleType: ride.vehicleType,
-          seats: ride.seats,
-          date: ride.date,
-          time: ride.time,
-          description: ride.description
+          color: '#E6007A',
+          status: ride.status,
+          statusName: ride.statusName
         }
       })
+      
       setAvailableRides(transformedRides)
     } catch (error) {
       console.error('Failed to search rides:', error)
-      setRidesError('Failed to search rides. Please try again.')
+      setRidesError(error.message || 'Failed to search rides. Please try again.')
       setAvailableRides([])
     } finally {
       setIsLoadingRides(false)
@@ -584,11 +556,7 @@ function FindRide() {
   }
 
   const formatPrice = (price) => {
-    return new Intl.NumberFormat('en-UG', {
-      style: 'currency',
-      currency: 'UGX',
-      minimumFractionDigits: 0
-    }).format(price)
+    return `${parseFloat(price).toFixed(4)} DEV`
   }
 
   return (
@@ -683,18 +651,36 @@ function FindRide() {
 
           {/* Fixed Error Message */}
           {ridesError && (
-            <div className="m-4 p-3 bg-red-50 border border-red-200 rounded-lg flex-shrink-0">
-              <div className="flex items-center space-x-2 text-red-700">
-                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+            <div className="m-4 p-4 bg-red-50 border border-red-200 rounded-lg flex-shrink-0">
+              <div className="flex items-start space-x-2 text-red-700 mb-2">
+                <svg className="w-5 h-5 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
                   <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
                 </svg>
-                <span className="text-xs font-medium">{ridesError}</span>
+                <div className="flex-1">
+                  <p className="text-sm font-semibold mb-1">Contract Connection Error</p>
+                  <p className="text-xs">{ridesError}</p>
+                  {ridesError.includes('contract not found') && (
+                    <div className="mt-3 text-xs space-y-2">
+                      <p className="font-medium">Please verify:</p>
+                      <ol className="list-decimal list-inside space-y-1 text-gray-700 ml-2">
+                        <li>Your contract is deployed to <span className="font-mono bg-white px-1 rounded">Moonbase Alpha (Chain ID: 1287)</span></li>
+                        <li>Check contract on <a 
+                          href={`https://moonbase.moonscan.io/address/${import.meta.env.VITE_CONTRACT_ADDRESS || '0x3FaB021c51812af385ee95621b24Ce3A1e6ADc14'}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-blue-600 hover:underline font-mono"
+                        >Moonscan</a></li>
+                        <li>Update <span className="font-mono bg-white px-1 rounded">VITE_CONTRACT_ADDRESS</span> in your .env file</li>
+                      </ol>
+                    </div>
+                  )}
+                </div>
               </div>
               <button
                 onClick={fetchRides}
-                className="mt-2 text-xs text-red-600 hover:text-red-800 underline"
+                className="mt-3 px-3 py-1.5 text-xs bg-red-100 text-red-700 hover:bg-red-200 rounded transition-colors"
               >
-                Try again
+                Retry Connection
               </button>
             </div>
           )}

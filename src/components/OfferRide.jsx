@@ -3,6 +3,7 @@ import mapboxgl from 'mapbox-gl'
 import 'mapbox-gl/dist/mapbox-gl.css'
 import { Check, AlertCircle, CheckCircle, X } from 'lucide-react'
 import useWalletStore from '../store/walletStore'
+import contractService from '../services/contractService'
 import rideService from '../services/rideService'
 
 // Mapbox access token
@@ -416,8 +417,19 @@ function OfferRide() {
     setIsSubmitting(true)
 
     try {
-      // Prepare ride data for Appwrite - matching exact schema
-      const rideData = {
+      // Step 1: Create ride on smart contract (for escrow and payment)
+      const fromLocation = formData.from
+      const toLocation = formData.to
+      const priceInEth = formData.price
+
+      console.log('Creating ride on smart contract:', { fromLocation, toLocation, priceInEth })
+
+      const blockchainResult = await contractService.createRide(fromLocation, toLocation, priceInEth)
+      
+      console.log('Ride created on blockchain:', blockchainResult)
+      
+      // Step 2: Save ride details to Appwrite (for coordinates and metadata)
+      const appwriteData = {
         driverWallet: selectedAccount.address,
         driverName: formData.driverName,
         driverPhone: formData.driverPhone || '',
@@ -428,28 +440,23 @@ function OfferRide() {
         registrationNumber: formData.registrationNumber,
         from: formData.from,
         to: formData.to,
+        pickupCoordinates: `${pickupLocation[1]},${pickupLocation[0]}`, // "lat,lng"
+        dropoffCoordinates: `${dropoffLocation[1]},${dropoffLocation[0]}`, // "lat,lng"
         date: formData.date,
         time: formData.time,
         seats: formData.seats,
         price: formData.price,
         description: formData.description || '',
-        // pickupLocation is [lng, lat] array from Mapbox
-        pickupCoordinates: JSON.stringify({ 
-          lng: pickupLocation[0], 
-          lat: pickupLocation[1] 
-        }),
-        // dropoffLocation is [lng, lat] array from Mapbox
-        dropoffCoordinates: JSON.stringify({ 
-          lng: dropoffLocation[0], 
-          lat: dropoffLocation[1] 
-        }),
-        status: 'active'
+        status: 'active',
+        blockchainRideId: blockchainResult.rideId || '',
+        blockchainTxHash: blockchainResult.transactionHash || ''
       }
 
-      console.log('Submitting ride to Appwrite:', rideData)
+      console.log('Saving ride metadata to Appwrite:', appwriteData)
 
-      // Submit to Appwrite
-      await rideService.createRide(rideData)
+      await rideService.createRide(appwriteData)
+      
+      console.log('Ride saved successfully to both blockchain and Appwrite')
       
       // Show success modal
       setShowSuccessModal(true)
@@ -478,7 +485,7 @@ function OfferRide() {
       
     } catch (error) {
       console.error('Error posting ride:', error)
-      alert('Failed to post ride. Please try again.')
+      alert(error.message || 'Failed to post ride. Please try again.')
     } finally {
       setIsSubmitting(false)
     }
