@@ -1,9 +1,11 @@
 import { ethers } from 'ethers'
-import { RYDR_CONTRACT_ABI, RYDR_CONTRACT_ADDRESS, RPC_URL, RideStatus } from '../config/contract'
+import { RYDR_CONTRACT_ABI, RYDR_CONTRACT_ADDRESS, RPC_URL, RideStatus, CHAIN_ID } from '../config/contract'
+import useWalletStore from '../store/walletStore'
 
 /**
  * RydrRide Smart Contract Service
  * Provides all blockchain interaction functions for the ride-sharing platform
+ * Supports both MetaMask and Polkadot wallets (SubWallet, Talisman)
  */
 
 class ContractService {
@@ -33,16 +35,111 @@ class ContractService {
   }
 
   /**
+   * Switch to Moonbase Alpha network (Chain ID 1287)
+   */
+  async switchToMoonbaseAlpha(provider) {
+    try {
+      const chainIdHex = '0x' + CHAIN_ID.toString(16) // Convert 1287 to 0x507
+      
+      console.log(`🔄 Switching to Moonbase Alpha (Chain ID: ${CHAIN_ID})...`)
+      
+      await provider.request({
+        method: 'wallet_switchEthereumChain',
+        params: [{ chainId: chainIdHex }],
+      })
+      
+      console.log('✅ Network switched to Moonbase Alpha')
+    } catch (switchError) {
+      // This error code indicates that the chain has not been added to the wallet
+      if (switchError.code === 4902) {
+        try {
+          console.log('📝 Adding Moonbase Alpha network...')
+          
+          await provider.request({
+            method: 'wallet_addEthereumChain',
+            params: [
+              {
+                chainId: '0x' + CHAIN_ID.toString(16),
+                chainName: 'Moonbase Alpha',
+                nativeCurrency: {
+                  name: 'DEV',
+                  symbol: 'DEV',
+                  decimals: 18,
+                },
+                rpcUrls: ['https://rpc.api.moonbase.moonbeam.network'],
+                blockExplorerUrls: ['https://moonbase.moonscan.io/'],
+              },
+            ],
+          })
+          
+          console.log('✅ Moonbase Alpha network added')
+        } catch (addError) {
+          console.error('Failed to add Moonbase Alpha network:', addError)
+          throw addError
+        }
+      } else {
+        console.error('Failed to switch network:', switchError)
+        throw switchError
+      }
+    }
+  }
+
+  /**
    * Initialize contract with signer (for transactions)
-   * Requires MetaMask or other Web3 provider
+   * Supports both MetaMask and Polkadot wallets
    */
   async initSigner() {
     try {
-      if (!window.ethereum) {
-        throw new Error('Please install MetaMask or another Web3 wallet')
+      // Check which wallet is connected via Zustand store
+      const { selectedAccount } = useWalletStore.getState()
+      
+      let ethereumProvider = window.ethereum
+      
+      // If Polkadot wallet is connected, we need to use its specific provider
+      if (selectedAccount?.meta?.source === 'polkadot') {
+        console.log('🔷 Polkadot wallet detected, looking for EVM provider...')
+        
+        // When multiple wallets are installed, window.ethereum might point to MetaMask
+        // We need to find the Polkadot wallet's provider specifically
+        
+        // SubWallet injects as window.SubWallet or in window.ethereum.providers array
+        if (window.SubWallet) {
+          ethereumProvider = window.SubWallet
+          console.log('✅ Using SubWallet provider')
+        } 
+        // Check if ethereum.providers exists (for multiple wallet support)
+        else if (window.ethereum?.providers && Array.isArray(window.ethereum.providers)) {
+          // Look for SubWallet or Talisman in providers array
+          const subwallet = window.ethereum.providers.find(p => p.isSubWallet)
+          const talisman = window.ethereum.providers.find(p => p.isTalisman)
+          
+          if (subwallet) {
+            ethereumProvider = subwallet
+            console.log('✅ Using SubWallet from providers array')
+          } else if (talisman) {
+            ethereumProvider = talisman
+            console.log('✅ Using Talisman from providers array')
+          }
+        }
+        
+        if (!ethereumProvider) {
+          throw new Error('Please ensure your Polkadot wallet is set as the default wallet in your browser, or disable MetaMask temporarily')
+        }
+        
+        // Ensure SubWallet is on Moonbase Alpha network
+        await this.switchToMoonbaseAlpha(ethereumProvider)
+      } else {
+        console.log('🦊 Using MetaMask/Ethereum wallet')
+        
+        if (!ethereumProvider) {
+          throw new Error('Please install MetaMask or another Web3 wallet')
+        }
+        
+        // Ensure MetaMask is on Moonbase Alpha network
+        await this.switchToMoonbaseAlpha(ethereumProvider)
       }
 
-      const provider = new ethers.BrowserProvider(window.ethereum)
+      const provider = new ethers.BrowserProvider(ethereumProvider)
       this.signer = await provider.getSigner()
       this.contract = new ethers.Contract(
         RYDR_CONTRACT_ADDRESS,
@@ -50,7 +147,10 @@ class ContractService {
         this.signer
       )
       
-      return await this.signer.getAddress()
+      const address = await this.signer.getAddress()
+      console.log('✅ Signer initialized:', address)
+      
+      return address
     } catch (error) {
       console.error('Failed to initialize signer:', error)
       throw error

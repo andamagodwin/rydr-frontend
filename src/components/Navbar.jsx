@@ -1,18 +1,44 @@
 import React, { useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { useWallet } from '../hooks/useWallet'
+import { usePolkadotWallet } from '../hooks/usePolkadotWallet'
 
 function Navbar() {
-  const { selectedAccount, formatAddress, disconnectWallet } = useWallet()
+  const { selectedAccount: ethAccount, formatAddress: ethFormatAddress, disconnectWallet: disconnectEth } = useWallet()
+  const { selectedAccount: polkadotAccount, formatAddress: polkadotFormatAddress, disconnectWallet: disconnectPolkadot, connectWallet: connectPolkadot, isConnecting } = usePolkadotWallet()
+  
   const [copied, setCopied] = useState(false)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const [walletMenuOpen, setWalletMenuOpen] = useState(false)
   const location = useLocation()
 
+  // Check if any wallet is connected
+  const isConnected = !!(ethAccount || polkadotAccount)
+  const selectedAccount = polkadotAccount || ethAccount
+  const walletType = polkadotAccount ? 'Polkadot' : ethAccount ? 'MetaMask' : null
+  const formatAddress = polkadotAccount ? polkadotFormatAddress : ethFormatAddress
+
   const copyAddress = () => {
-    if (selectedAccount?.address) {
-      navigator.clipboard.writeText(selectedAccount.address)
+    const address = polkadotAccount?.ethAddress || ethAccount?.address
+    if (address) {
+      navigator.clipboard.writeText(address)
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
+    }
+  }
+
+  const handleDisconnect = () => {
+    disconnectEth()
+    disconnectPolkadot()
+    setWalletMenuOpen(false)
+  }
+
+  const handleConnectPolkadot = async () => {
+    try {
+      await connectPolkadot()
+      setWalletMenuOpen(false)
+    } catch (err) {
+      console.error('Failed to connect Polkadot wallet:', err)
     }
   }
 
@@ -68,8 +94,15 @@ function Navbar() {
                 <div className="flex items-center space-x-2">
                   <div className="w-2 h-2 bg-primary rounded-full"></div>
                   <span className="text-sm font-medium text-gray-700">
-                    {formatAddress(selectedAccount.address)}
+                    {formatAddress(polkadotAccount?.ethAddress || ethAccount?.address)}
                   </span>
+                  {walletType && (
+                    <span className={`text-xs font-semibold px-2 py-0.5 rounded ${
+                      walletType === 'Polkadot' ? 'bg-pink-100 text-pink-700' : 'bg-orange-100 text-orange-700'
+                    }`}>
+                      {walletType}
+                    </span>
+                  )}
                   <button
                     onClick={copyAddress}
                     className="text-gray-500 hover:text-primary transition-colors"
@@ -88,7 +121,7 @@ function Navbar() {
                 </div>
               </div>
               <button
-                onClick={disconnectWallet}
+                onClick={handleDisconnect}
                 className="text-red-500 hover:text-red-700 transition-colors font-medium text-sm"
                 title="Disconnect Wallet"
               >
@@ -96,9 +129,51 @@ function Navbar() {
               </button>
             </div>
           ) : (
-            <Link to="/connect-wallet" className="bg-primary text-white px-6 py-2 rounded-lg hover:bg-opacity-90 transition-colors font-medium">
-              Connect Wallet
-            </Link>
+            <div className="relative">
+              <button
+                onClick={() => setWalletMenuOpen(!walletMenuOpen)}
+                className="flex items-center gap-2 px-6 py-2 bg-gradient-to-r from-primary to-pink-600 text-white rounded-lg hover:shadow-lg transition-all"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+                </svg>
+                Connect Wallet
+              </button>
+
+              {walletMenuOpen && (
+                <div className="absolute right-0 mt-2 w-72 bg-white rounded-lg shadow-xl border border-gray-200 py-2 z-50">
+                  <button
+                    onClick={handleConnectPolkadot}
+                    disabled={isConnecting}
+                    className="w-full px-4 py-3 text-left hover:bg-gray-50 flex items-center gap-3 transition-colors disabled:opacity-50"
+                  >
+                    <div className="w-10 h-10 bg-gradient-to-br from-pink-500 to-purple-600 rounded-full flex items-center justify-center flex-shrink-0">
+                      <span className="text-white font-bold text-lg">◉</span>
+                    </div>
+                    <div className="flex-1">
+                      <div className="font-semibold text-gray-900">Polkadot Wallet</div>
+                      <div className="text-xs text-gray-500">SubWallet, Talisman, Polkadot.js</div>
+                    </div>
+                  </button>
+
+                  <div className="border-t border-gray-200 my-2"></div>
+
+                  <Link
+                    to="/connect-wallet"
+                    onClick={() => setWalletMenuOpen(false)}
+                    className="w-full px-4 py-3 text-left hover:bg-gray-50 flex items-center gap-3 transition-colors"
+                  >
+                    <div className="w-10 h-10 bg-gradient-to-br from-orange-500 to-yellow-600 rounded-full flex items-center justify-center flex-shrink-0">
+                      <span className="text-white font-bold text-lg">M</span>
+                    </div>
+                    <div className="flex-1">
+                      <div className="font-semibold text-gray-900">MetaMask</div>
+                      <div className="text-xs text-gray-500">Ethereum wallet for EVM transactions</div>
+                    </div>
+                  </Link>
+                </div>
+              )}
+            </div>
           )}
         </div>
 
@@ -110,7 +185,7 @@ function Navbar() {
               <div className="flex items-center space-x-2">
                 <div className="w-2 h-2 bg-primary rounded-full"></div>
                 <span className="text-xs font-medium text-gray-700">
-                  {formatAddress(selectedAccount.address)}
+                  {formatAddress(polkadotAccount?.ethAddress || ethAccount?.address)}
                 </span>
                 <button
                   onClick={copyAddress}
@@ -128,7 +203,7 @@ function Navbar() {
                   )}
                 </button>
                 <button
-                  onClick={disconnectWallet}
+                  onClick={handleDisconnect}
                   className="text-red-500 hover:text-red-700 transition-colors"
                   title="Disconnect Wallet"
                 >
@@ -139,9 +214,12 @@ function Navbar() {
               </div>
             </div>
           ) : (
-            <Link to="/connect-wallet" className="bg-primary text-white px-2 py-1 rounded text-xs font-medium">
+            <button 
+              onClick={() => setWalletMenuOpen(!walletMenuOpen)}
+              className="bg-primary text-white px-2 py-1 rounded text-xs font-medium"
+            >
               Connect
-            </Link>
+            </button>
           )}
           
           {/* Hamburger Button */}
