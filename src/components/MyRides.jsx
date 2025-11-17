@@ -50,15 +50,20 @@ function MyRides() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isConnected, selectedAccount])
 
-  const handleMarkCompleted = async (rideId) => {
+  const handleMarkCompleted = async (appwriteId) => {
     if (!window.confirm('Mark this ride as completed? This will release payment to you.')) {
       return
     }
 
-    setActionLoading(`complete-${rideId}`)
+    setActionLoading(`complete-${appwriteId}`)
     try {
+      const ride = offeredRides.find(r => r.$id === appwriteId)
+      if (!ride || !ride.blockchainRideId) {
+        throw new Error('Blockchain ride ID not found')
+      }
+      
       // Call smart contract to mark as completed
-      await contractService.markCompleted(rideId)
+      await contractService.markCompleted(ride.blockchainRideId)
       
       // Refresh rides
       await fetchMyRides()
@@ -72,14 +77,19 @@ function MyRides() {
     }
   }
 
-  const handleReleasePayment = async (rideId) => {
-    if (!window.confirm('Release payment for this ride?')) {
+  const handleReleasePayment = async (appwriteId) => {
+    if (!window.confirm('Release payment to driver? This action cannot be undone.')) {
       return
     }
 
-    setActionLoading(`release-${rideId}`)
+    setActionLoading(`release-${appwriteId}`)
     try {
-      await contractService.releasePayment(rideId)
+      const ride = offeredRides.find(r => r.$id === appwriteId) || bookedRides.find(r => r.$id === appwriteId)
+      if (!ride || !ride.blockchainRideId) {
+        throw new Error('Blockchain ride ID not found')
+      }
+      
+      await contractService.releasePayment(ride.blockchainRideId)
       
       // Refresh rides
       await fetchMyRides()
@@ -93,20 +103,22 @@ function MyRides() {
     }
   }
 
-  const handleCancelRide = async (rideId) => {
+  const handleCancelRide = async (appwriteId) => {
     if (!window.confirm('Cancel this ride? If booked, the passenger will be refunded.')) {
       return
     }
 
-    setActionLoading(`cancel-${rideId}`)
+    setActionLoading(`cancel-${appwriteId}`)
     try {
-      await contractService.cancelRide(rideId)
+      const ride = offeredRides.find(r => r.$id === appwriteId)
+      if (!ride || !ride.blockchainRideId) {
+        throw new Error('Blockchain ride ID not found')
+      }
+      
+      await contractService.cancelRide(ride.blockchainRideId)
       
       // Update Appwrite status
-      const ride = offeredRides.find(r => r.$id === rideId)
-      if (ride) {
-        await rideService.updateRideStatus(ride.$id, 'cancelled')
-      }
+      await rideService.updateRideStatus(ride.$id, 'cancelled')
       
       // Refresh rides
       await fetchMyRides()

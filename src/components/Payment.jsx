@@ -1,13 +1,17 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { useWallet } from '../hooks/useWallet'
+import useWalletStore from '../store/walletStore'
 import contractService from '../services/contractService'
 import { CheckCircle, XCircle, Loader, ArrowLeft } from 'lucide-react'
+import { ethers } from 'ethers'
 
 function Payment() {
 	const location = useLocation()
 	const navigate = useNavigate()
-	const { selectedAccount, isConnected, balance } = useWallet()
+	const isConnected = useWalletStore((state) => state.isConnected)
+	const selectedAccount = useWalletStore((state) => state.selectedAccount)
+	
+	const [balance, setBalance] = useState('0')
 
 	// Ride data should be passed via route state from FindRide
 	const ride = location.state?.ride || null
@@ -15,6 +19,44 @@ function Payment() {
 	const [status, setStatus] = useState('idle') // idle | booking | booked | releasing | released | error
 	const [error, setError] = useState(null)
 	const [txHash, setTxHash] = useState(null)
+	
+	// Fetch balance when wallet connects
+	useEffect(() => {
+		const fetchBalance = async () => {
+			if (!isConnected || !selectedAccount?.address) {
+				setBalance('0')
+				return
+			}
+			
+			try {
+				let ethereumProvider = window.ethereum
+				
+				// Check if Polkadot wallet
+				const isPolkadot = selectedAccount?.meta?.source === 'polkadot'
+				if (isPolkadot) {
+					if (window.SubWallet) {
+						ethereumProvider = window.SubWallet
+					} else if (window.ethereum?.providers && Array.isArray(window.ethereum.providers)) {
+						const subwallet = window.ethereum.providers.find(p => p.isSubWallet)
+						const talisman = window.ethereum.providers.find(p => p.isTalisman)
+						ethereumProvider = subwallet || talisman || window.ethereum
+					}
+				}
+				
+				if (ethereumProvider) {
+					const provider = new ethers.BrowserProvider(ethereumProvider)
+					const balanceWei = await provider.getBalance(selectedAccount.address)
+					const balanceDev = ethers.formatEther(balanceWei)
+					setBalance(balanceDev)
+				}
+			} catch (err) {
+				console.error('Failed to fetch balance:', err)
+				setBalance('0')
+			}
+		}
+		
+		fetchBalance()
+	}, [isConnected, selectedAccount])
 
 	/**
 	 * BOOK RIDE - Passenger pays and books the ride
@@ -26,6 +68,11 @@ function Payment() {
 			setError('Please connect your wallet to book this ride')
 			return
 		}
+		
+		if (!ride.blockchainRideId) {
+			setError('This ride does not have a blockchain ID. It may be an old ride.')
+			return
+		}
 
 		setStatus('booking')
 		setError(null)
@@ -33,7 +80,7 @@ function Payment() {
 
 		try {
 			// Book the ride by sending payment
-			const result = await contractService.bookRide(ride.id, ride.price)
+			const result = await contractService.bookRide(ride.blockchainRideId, ride.price)
 			
 			setTxHash(result.transactionHash)
 			setStatus('booked')
@@ -56,12 +103,17 @@ function Payment() {
 			setError('Please connect your wallet to release payment')
 			return
 		}
+		
+		if (!ride.blockchainRideId) {
+			setError('This ride does not have a blockchain ID. It may be an old ride.')
+			return
+		}
 
 		setStatus('releasing')
 		setError(null)
 
 		try {
-			const result = await contractService.releasePayment(ride.id)
+			const result = await contractService.releasePayment(ride.blockchainRideId)
 			
 			setTxHash(result.transactionHash)
 			setStatus('released')

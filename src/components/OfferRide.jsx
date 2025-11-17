@@ -448,6 +448,7 @@ function OfferRide() {
         price: formData.price,
         description: formData.description || '',
         status: 'active',
+        blockchainRideId: blockchainResult.rideId || '',
         blockchainTxHash: blockchainResult.transactionHash || ''
       }
 

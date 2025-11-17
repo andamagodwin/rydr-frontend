@@ -46,6 +46,7 @@ function FindRide() {
         return {
           id: ride.$id, // Appwrite document ID
           appwriteId: ride.$id,
+          blockchainRideId: ride.blockchainRideId, // Blockchain ride ID for contract calls
           from: ride.from,
           to: ride.to,
           driverAddress: ride.driverWallet,
